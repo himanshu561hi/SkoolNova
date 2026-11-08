@@ -14,21 +14,25 @@ async function start() {
   }
 }
 
-// Graceful Shutdown
-const signals: NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
-for (const signal of signals) {
-  process.on(signal, async () => {
-    console.log(`\n🛑 Received ${signal}. Gracefully closing server...`);
-    try {
-      await app.close();
-      console.log("✅ Server closed successfully.");
-      process.exit(0);
-    } catch (err) {
-      console.error("❌ Error during server closure:", err);
-      process.exit(1);
-    }
-  });
+// Only listen locally or on non-serverless container environments
+if (!process.env.VERCEL) {
+  void start();
+
+  // Graceful Shutdown
+  const signals: NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
+  for (const signal of signals) {
+    process.on(signal, async () => {
+      console.log(`\n🛑 Received ${signal}. Gracefully closing server...`);
+      try {
+        await app.close();
+        console.log("✅ Server closed successfully.");
+        process.exit(0);
+      } catch (err) {
+        console.error("❌ Error during server closure:", err);
+        process.exit(1);
+      }
+    });
+  }
 }
 
-void start();
-
+export default app;
