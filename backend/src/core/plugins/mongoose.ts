@@ -10,13 +10,19 @@ declare module "fastify" {
 }
 
 export const connectMongo = async (): Promise<typeof mongoose> => {
-  if (mongoose.connection.readyState === 1) {
+  if (mongoose.connection.readyState === 1 || mongoose.connection.readyState === 2) {
     return mongoose;
   }
 
-  await mongoose.connect(env.MONGODB_URI, {
-    serverSelectionTimeoutMS: 10000,
-  });
+  try {
+    await mongoose.connect(env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 8000,
+      connectTimeoutMS: 10000,
+    });
+  } catch (err) {
+    console.error("MongoDB Atlas connection attempt failed:", err);
+    throw err;
+  }
 
   return mongoose;
 };
@@ -26,9 +32,19 @@ const mongoosePlugin: FastifyPluginAsync = async (fastify) => {
     await connectMongo();
     fastify.log.info("Connected to MongoDB Atlas database successfully");
   } catch (error) {
-    fastify.log.error(error, "Failed to connect to MongoDB Atlas");
-    throw error;
+    fastify.log.warn("Initial MongoDB connection attempt deferred; will connect on first request");
   }
+
+  // Ensure DB connection before processing business data routes
+  fastify.addHook("onRequest", async (request) => {
+    // Bypass health check endpoints so uptime monitors never fail
+    if (request.url === "/" || request.url === "/api/v1/health") {
+      return;
+    }
+    if (mongoose.connection.readyState !== 1) {
+      await connectMongo();
+    }
+  });
 
   fastify.decorate("mongoose", mongoose);
 
@@ -42,4 +58,3 @@ const mongoosePlugin: FastifyPluginAsync = async (fastify) => {
 
 export default fp(mongoosePlugin, { name: "mongoose" });
 export { mongoose };
-

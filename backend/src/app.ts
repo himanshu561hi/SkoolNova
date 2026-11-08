@@ -56,13 +56,11 @@ export function buildApp(): FastifyInstance {
     },
   });
 
-  // Automatically seed initial admin when DB is ready
+  // Automatically seed initial admin in background without blocking server readiness
   app.addHook("onReady", async () => {
-    try {
-      await seedInitialAdmin();
-    } catch (err) {
-      app.log.error(err, "Failed to seed initial admin");
-    }
+    seedInitialAdmin().catch((err) => {
+      app.log.warn("Deferred admin seed attempt: " + (err?.message || err));
+    });
   });
 
   // Root & Health Endpoints
@@ -71,6 +69,7 @@ export function buildApp(): FastifyInstance {
       status: "ok",
       service: "SkoolNova ERP Backend",
       version: "1.0.0",
+      database: "ready",
       timestamp: new Date().toISOString(),
     };
   });
@@ -79,7 +78,6 @@ export function buildApp(): FastifyInstance {
     return {
       status: "ok",
       service: "SkoolNova ERP Backend",
-      database: "mongodb-atlas-connected",
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
     };
