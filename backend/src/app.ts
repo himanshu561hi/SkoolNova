@@ -29,7 +29,21 @@ export function buildApp(): FastifyInstance {
   });
 
   app.register(cors, {
-    origin: [env.CLIENT_ORIGIN, "http://localhost:5173", "http://127.0.0.1:5173"],
+    origin: (origin, cb) => {
+      // Allow requests with no origin (curl, mobile apps, postman)
+      if (!origin) return cb(null, true);
+
+      // Allow configured origin, localhost, or any vercel.app domains
+      if (
+        origin === env.CLIENT_ORIGIN ||
+        origin.includes("localhost") ||
+        origin.includes("127.0.0.1") ||
+        origin.endsWith(".vercel.app")
+      ) {
+        return cb(null, true);
+      }
+      return cb(null, true);
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });
@@ -51,7 +65,16 @@ export function buildApp(): FastifyInstance {
     }
   });
 
-  // Base Health Endpoint
+  // Root & Health Endpoints
+  app.get("/", async () => {
+    return {
+      status: "ok",
+      service: "SkoolNova ERP Backend",
+      version: "1.0.0",
+      timestamp: new Date().toISOString(),
+    };
+  });
+
   app.get("/api/v1/health", async () => {
     return {
       status: "ok",
