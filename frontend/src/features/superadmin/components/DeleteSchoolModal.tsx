@@ -5,7 +5,7 @@ type Props = {
   isOpen: boolean;
   schoolName: string;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: (otp: string) => void;
 };
 
 export default function DeleteSchoolModal({ isOpen, schoolName, onClose, onConfirm }: Props) {
@@ -24,10 +24,10 @@ export default function DeleteSchoolModal({ isOpen, schoolName, onClose, onConfi
 
   const handleVerify = (e: React.FormEvent) => {
     e.preventDefault();
-    if (otp === "123456") {
-      onConfirm();
+    if (otp.length === 6) {
+      onConfirm(otp);
     } else {
-      setError("Invalid OTP. Please check your email and try again.");
+      setError("Please enter a valid 6-digit OTP.");
     }
   };
 

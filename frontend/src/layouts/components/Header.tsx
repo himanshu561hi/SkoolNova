@@ -10,6 +10,24 @@ function Header() {
 
   const { theme, toggleTheme } = useTheme();
 
+  const getRoleDisplayName = (r?: string | null) => {
+    switch (r) {
+      case "SUPER_ADMIN":
+        return "Super Administrator";
+      case "MANAGER":
+      case "SCHOOL_MANAGER":
+      case "PRINCIPAL":
+      case "DIRECTOR":
+        return "Principal / Director";
+      case "TEACHER":
+        return "Faculty Member";
+      case "STUDENT":
+        return "Student";
+      default:
+        return r || "Campus User";
+    }
+  };
+
   return (
     <header className="flex items-center justify-between sticky top-0 z-40 border-b border-slate-200 bg-white px-4 py-2.5 sm:px-6 sm:py-3 dark:border-slate-800 dark:bg-slate-900 shadow-sm">
       {/* LEFT — stacked on mobile, inline on desktop */}
@@ -26,11 +44,11 @@ function Header() {
       <div className="flex items-center gap-2 sm:gap-4 shrink-0">
         {/* USER INFO — hidden on mobile */}
         <div className="hidden sm:flex text-right flex-col justify-center">
-          <p className="text-xs font-semibold text-primary tracking-wider uppercase">
-            {role}
+          <p className="text-xs font-bold text-primary tracking-wider uppercase">
+            {getRoleDisplayName(role)}
           </p>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
-            {user?.schoolId}
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-semibold">
+            {user?.schoolName || (role === "SUPER_ADMIN" ? "Central System" : user?.schoolId || "")}
           </p>
         </div>
 

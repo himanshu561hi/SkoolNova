@@ -29,7 +29,13 @@ function RoleGuard({ allowedRoles, children }: RoleGuardProps) {
 
   const normalizedRole = role?.trim().toUpperCase();
   const normalizedAllowedRoles = allowedRoles.map((r) => r.trim().toUpperCase());
-  const isAuthorized = normalizedRole ? normalizedAllowedRoles.includes(normalizedRole) : false;
+  const isManagerRole = (r?: string) =>
+    r === "MANAGER" || r === "SCHOOL_MANAGER" || r === "PRINCIPAL" || r === "DIRECTOR";
+
+  const isAuthorized = normalizedRole ? (
+    normalizedAllowedRoles.includes(normalizedRole) ||
+    (isManagerRole(normalizedRole) && (normalizedAllowedRoles.includes("MANAGER") || normalizedAllowedRoles.includes("SCHOOL_MANAGER")))
+  ) : false;
 
   if (!isAuthorized) {
     return <Navigate replace to={ROUTE_PATHS.UNAUTHORIZED} />;

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import PageHeader from "@/components/shared/PageHeader";
-import { getLeaves, updateLeaveStatus } from "../services/leave.service";
+import { getLeavesAsync, updateLeaveStatus } from "../services/leave.service";
 import { LeaveApplication } from "../types/leave.types";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { getStudents } from "@/features/student/services/student.service";
@@ -21,9 +21,9 @@ export default function ManagerLeavePage() {
   const [actionType, setActionType] = useState<"APPROVED" | "REJECTED" | null>(null);
 
   const loadData = async () => {
-    let allLeaves = getLeaves(user?.schoolId).sort((a,b) => new Date(b.appliedOn).getTime() - new Date(a.appliedOn).getTime());
+    const rawLeaves = await getLeavesAsync(user?.schoolId);
+    const allLeaves = rawLeaves.sort((a,b) => new Date(b.appliedOn).getTime() - new Date(a.appliedOn).getTime());
     
-    // If teacher, optionally filter to their class. For simplicity in demo, showing all or maybe teacher wants all.
     setLeaves(allLeaves);
     setFilteredLeaves(allLeaves);
   };
@@ -53,14 +53,18 @@ export default function ManagerLeavePage() {
     setIsModalOpen(true);
   };
 
-  const handleConfirmAction = (e: React.FormEvent) => {
+  const handleConfirmAction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeLeave || !actionType || !user) return;
 
-    updateLeaveStatus(activeLeave.id, actionType, remark, user.firstName + " " + user.lastName, "managerRemark", user.schoolId);
-    toast.success(`Leave ${actionType.toLowerCase()} successfully`);
-    setIsModalOpen(false);
-    loadData();
+    try {
+      await updateLeaveStatus(activeLeave.id, actionType, remark, user.firstName + " " + user.lastName, "managerRemark", user.schoolId);
+      toast.success(`Leave ${actionType.toLowerCase()} successfully`);
+      setIsModalOpen(false);
+      await loadData();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to update leave status");
+    }
   };
 
   return (

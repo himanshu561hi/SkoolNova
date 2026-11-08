@@ -4,25 +4,27 @@ import { Building2, Plus, School, Users, CheckCircle2 } from "lucide-react";
 import AddSchoolModal from "../../superadmin/components/AddSchoolModal";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
-
-type SchoolEntry = {
-  id: string;
-  name: string;
-  managerEmail: string;
-  createdAt: string;
-};
+import { getSchools, type SchoolEntry } from "../../superadmin/services/school.service";
 
 export default function SuperAdminDashboard() {
   const [schools, setSchools] = useState<SchoolEntry[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadSchools();
   }, []);
 
-  const loadSchools = () => {
-    const localSchools = JSON.parse(localStorage.getItem("mock_schools") || "[]");
-    setSchools(localSchools);
+  const loadSchools = async () => {
+    setLoading(true);
+    try {
+      const data = await getSchools();
+      setSchools(data || []);
+    } catch {
+      setSchools([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSchoolAdded = () => {
@@ -31,18 +33,7 @@ export default function SuperAdminDashboard() {
     toast.success("School and Manager created successfully!");
   };
 
-  const toggleStatus = (schoolId: string, currentStatus: string) => {
-    const localSchools = JSON.parse(localStorage.getItem("mock_schools") || "[]");
-    const updated = localSchools.map((s: any) => {
-      if (s.id === schoolId) {
-        return { ...s, status: currentStatus === "ACTIVE" ? "INACTIVE" : "ACTIVE" };
-      }
-      return s;
-    });
-    localStorage.setItem("mock_schools", JSON.stringify(updated));
-    loadSchools();
-    toast.success("School status updated!");
-  };
+  const activeCount = schools.filter((s) => s.status === "ACTIVE").length;
 
   return (
     <div className="space-y-8 pb-10">
@@ -67,7 +58,7 @@ export default function SuperAdminDashboard() {
           </div>
           <div>
             <p className="text-sm font-medium text-slate-500">Total Schools</p>
-            <h3 className="text-2xl font-bold text-slate-800 dark:text-white">{schools.length}</h3>
+            <h3 className="text-2xl font-bold text-slate-800 dark:text-white">{loading ? "..." : schools.length}</h3>
           </div>
         </div>
         
@@ -77,7 +68,7 @@ export default function SuperAdminDashboard() {
           </div>
           <div>
             <p className="text-sm font-medium text-slate-500">Active Tenants</p>
-            <h3 className="text-2xl font-bold text-slate-800 dark:text-white">{schools.length}</h3>
+            <h3 className="text-2xl font-bold text-slate-800 dark:text-white">{loading ? "..." : activeCount}</h3>
           </div>
         </div>
 
@@ -87,7 +78,7 @@ export default function SuperAdminDashboard() {
           </div>
           <div>
             <p className="text-sm font-medium text-slate-500">Total Managers</p>
-            <h3 className="text-2xl font-bold text-slate-800 dark:text-white">{schools.length}</h3>
+            <h3 className="text-2xl font-bold text-slate-800 dark:text-white">{loading ? "..." : schools.length}</h3>
           </div>
         </div>
       </div>
@@ -107,6 +98,14 @@ export default function SuperAdminDashboard() {
           Manage Schools
         </Link>
       </div>
+
+      {isModalOpen && (
+        <AddSchoolModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onSuccess={handleSchoolAdded}
+        />
+      )}
     </div>
   );
 }

@@ -71,7 +71,9 @@ export const TeachersPage = () => {
     const loadTeachers = async () => {
       try {
         const data = await getTeachers(user?.schoolId);
-        setTeachers(data);
+        setTeachers(data || []);
+      } catch (err: any) {
+        console.error("Failed to load teachers from backend:", err);
       } finally {
         setLoading(false);
       }
@@ -85,9 +87,11 @@ export const TeachersPage = () => {
   useEffect(() => {
     if (searchParams.get("action") === "create") {
       setIsAddModalOpen(true);
-      setSearchParams(new URLSearchParams());
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("action");
+      setSearchParams(nextParams, { replace: true });
     }
-  }, [searchParams, setSearchParams]);
+  }, []);
 
   /* ========================= */
   /* SEARCH & FILTERS */
@@ -136,8 +140,9 @@ export const TeachersPage = () => {
       const created = await createTeacher(newTeacher);
       setTeachers((previous) => [created, ...previous]);
       toast.success("Teacher added successfully");
-    } catch (error) {
-      toast.error("Failed to add teacher");
+    } catch (error: any) {
+      console.error("Failed to add teacher:", error);
+      toast.error(error?.message || "Failed to add teacher");
     }
   };
 

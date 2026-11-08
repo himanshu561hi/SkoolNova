@@ -8,19 +8,16 @@ import Modal from "@/components/ui/Modal";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { getClassSubjects } from "@/features/student/services/class-subjects.service";
+import {
+  getTimetableSlots,
+  assignTimetableSlot,
+  deleteTimetableSlot,
+  getTimetableSettings,
+  updateTimetableSettings,
+} from "../services/timetable.service";
+import { fetchPeriodsAsync, savePeriodsAsync, DEFAULT_PERIODS, Period } from "../utils/periods.utils";
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
-export type Period = { index: number; time: string; isLunch?: boolean };
-
-const DEFAULT_PERIODS: Period[] = [
-  { index: 0, time: "09:00 AM - 09:45 AM" },
-  { index: 1, time: "09:45 AM - 10:30 AM" },
-  { index: 2, time: "10:30 AM - 11:15 AM" },
-  { index: 3, time: "11:15 AM - 11:45 AM", isLunch: true },
-  { index: 4, time: "11:45 AM - 12:30 PM" },
-  { index: 5, time: "12:30 PM - 01:15 PM" },
-];
 
 // Time conversion helpers
 const formatTo24 = (t12: string) => {
@@ -64,7 +61,7 @@ export type TimetableEntry = {
 
 export default function TimetablePage() {
   const { user } = useAuthStore();
-  const isManager = user?.role === "MANAGER";
+  const isManager = user?.role === "MANAGER" || user?.role === "SCHOOL_MANAGER";
   
 
   const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -78,7 +75,7 @@ export default function TimetablePage() {
   const [autoAssignCoordinator, setAutoAssignCoordinator] = useState(false);
   const [isPoppedOut, setIsPoppedOut] = useState(false);
   const [popupPos, setPopupPos] = useState({ x: 50, y: 50 });
-  const [globalAllowTeachersEdit, setGlobalAllowTeachersEdit] = useState(localStorage.getItem(user?.schoolId ? `mock_allow_teachers_edit_${user.schoolId}` : "mock_allow_teachers_edit") === "true");
+  const [globalAllowTeachersEdit, setGlobalAllowTeachersEdit] = useState(false);
 
   const isCurrentClassTeacher = Boolean(teachers.find(t => t.id === user?.id)?.coordinatorFor?.includes(selectedClass));
   const canEdit = isManager || (globalAllowTeachersEdit && isCurrentClassTeacher);
@@ -123,26 +120,47 @@ export default function TimetablePage() {
     });
 
     const schoolId = useAuthStore.getState().user?.schoolId;
-    const ttKey = schoolId ? `mock_timetable_${schoolId}` : "mock_timetable";
-    const ttAtKey = schoolId ? `mock_timetable_updated_at_${schoolId}` : "mock_timetable_updated_at";
 
-    const savedTimetable = localStorage.getItem(ttKey);
-    if (savedTimetable) {
-      setEntries(JSON.parse(savedTimetable));
-    }
+    // Load Timetable Settings from DB
+    getTimetableSettings(schoolId)
+      .then(settings => {
+        if (settings?.allowTeachersEdit !== undefined) {
+          setGlobalAllowTeachersEdit(settings.allowTeachersEdit);
+        }
+      })
+      .catch(() => {});
 
-    const savedTime = localStorage.getItem(ttAtKey);
-    if (savedTime) {
-      setLastUpdated(savedTime);
-    }
+    // Load Timetable Slots from DB
+    getTimetableSlots(schoolId)
+      .then(slots => {
+        if (slots && Array.isArray(slots)) {
+          setEntries(slots.map(s => ({
+            id: s.id,
+            className: s.className,
+            day: s.day,
+            periodIndex: s.periodIndex,
+            teacherId: s.teacherId,
+            subject: s.subject,
+          })));
+          if (slots.length > 0) {
+            setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+          }
+        }
+      })
+      .catch(() => {});
 
-    const pKey = schoolId ? `mock_periods_${schoolId}` : "mock_periods";
-    const savedPeriods = localStorage.getItem(pKey);
-    if (savedPeriods) {
-      setPeriods(JSON.parse(savedPeriods));
-    } else {
-      setPeriods(DEFAULT_PERIODS);
-    }
+    // Load Periods from DB
+    fetchPeriodsAsync(schoolId)
+      .then(p => {
+        if (p && p.length > 0) {
+          setPeriods(p);
+        } else {
+          setPeriods(DEFAULT_PERIODS);
+        }
+      })
+      .catch(() => {
+        setPeriods(DEFAULT_PERIODS);
+      });
   }, []);
 
   const handleAssignCoordinator = async (teacherId: string) => {
@@ -195,7 +213,7 @@ export default function TimetablePage() {
   };
 
 
-  const handleDrop = (day: string, periodIndex: number) => {
+  const handleDrop = async (day: string, periodIndex: number) => {
     if (!canEdit || !draggedTeacherData) return;
     
     // CONFLICT CHECK: Is this teacher already assigned to another class at the exact same time?
@@ -212,32 +230,41 @@ export default function TimetablePage() {
       return;
     }
 
-    const newEntry: TimetableEntry = {
-      id: `${selectedClass}-${day}-${periodIndex}`,
-      className: selectedClass,
-      day,
-      periodIndex,
-      teacherId: draggedTeacherData.id,
-      subject: draggedTeacherData.subject,
-    };
-    
-    const newEntries = entries.filter(e => !(e.className === selectedClass && e.day === day && e.periodIndex === periodIndex));
-    newEntries.push(newEntry);
-    setEntries(newEntries);
-    
-    const now = new Date().toLocaleString();
     const schoolId = useAuthStore.getState().user?.schoolId;
-    const ttKey = schoolId ? `mock_timetable_${schoolId}` : "mock_timetable";
-    const ttAtKey = schoolId ? `mock_timetable_updated_at_${schoolId}` : "mock_timetable_updated_at";
-    localStorage.setItem(ttKey, JSON.stringify(newEntries));
-    localStorage.setItem(ttAtKey, now);
-    setLastUpdated(now);
-    
-    toast.success("Teacher assigned to slot!");
-    setDraggedTeacherData(null);
+    try {
+      const savedSlot = await assignTimetableSlot({
+        className: selectedClass,
+        day,
+        periodIndex,
+        teacherId: draggedTeacherData.id,
+        subject: draggedTeacherData.subject || "",
+        schoolId,
+      });
+
+      const newEntry: TimetableEntry = {
+        id: savedSlot.id,
+        className: selectedClass,
+        day,
+        periodIndex,
+        teacherId: draggedTeacherData.id,
+        subject: draggedTeacherData.subject,
+      };
+      
+      const newEntries = entries.filter(e => !(e.className === selectedClass && e.day === day && e.periodIndex === periodIndex));
+      newEntries.push(newEntry);
+      setEntries(newEntries);
+      
+      const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      setLastUpdated(now);
+      toast.success("Teacher assigned to slot!");
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to assign teacher to slot");
+    } finally {
+      setDraggedTeacherData(null);
+    }
   };
 
-  const handleMobileAssignTeacher = (teacherId: string, subject: string) => {
+  const handleMobileAssignTeacher = async (teacherId: string, subject: string) => {
     if (!canEdit || mobileAssignModal.periodIndex === null) return;
     
     const day = selectedMobileDay;
@@ -255,43 +282,49 @@ export default function TimetablePage() {
       return;
     }
 
-    const newEntry: TimetableEntry = {
-      id: `${selectedClass}-${day}-${periodIndex}`,
-      className: selectedClass,
-      day,
-      periodIndex,
-      teacherId,
-      subject,
-    };
-    
-    const newEntries = entries.filter(e => !(e.className === selectedClass && e.day === day && e.periodIndex === periodIndex));
-    newEntries.push(newEntry);
-    setEntries(newEntries);
-    
-    const now = new Date().toLocaleString();
     const schoolId2 = useAuthStore.getState().user?.schoolId;
-    const ttKey2 = schoolId2 ? `mock_timetable_${schoolId2}` : "mock_timetable";
-    const ttAtKey2 = schoolId2 ? `mock_timetable_updated_at_${schoolId2}` : "mock_timetable_updated_at";
-    localStorage.setItem(ttKey2, JSON.stringify(newEntries));
-    localStorage.setItem(ttAtKey2, now);
-    setLastUpdated(now);
-    
-    toast.success("Teacher assigned to slot!");
-    setMobileAssignModal({ isOpen: false, periodIndex: null });
+    try {
+      const savedSlot = await assignTimetableSlot({
+        className: selectedClass,
+        day,
+        periodIndex,
+        teacherId,
+        subject,
+        schoolId: schoolId2,
+      });
+
+      const newEntry: TimetableEntry = {
+        id: savedSlot.id,
+        className: selectedClass,
+        day,
+        periodIndex,
+        teacherId,
+        subject,
+      };
+      
+      const newEntries = entries.filter(e => !(e.className === selectedClass && e.day === day && e.periodIndex === periodIndex));
+      newEntries.push(newEntry);
+      setEntries(newEntries);
+      
+      const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      setLastUpdated(now);
+      toast.success("Teacher assigned to slot!");
+      setMobileAssignModal({ isOpen: false, periodIndex: null });
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to assign teacher to slot");
+    }
   };
 
-  const removeEntry = (id: string) => {
+  const removeEntry = async (id: string) => {
+    try {
+      await deleteTimetableSlot(id);
+    } catch (err) {
+      console.warn("Could not delete slot from DB", err);
+    }
     const newEntries = entries.filter(e => e.id !== id);
     setEntries(newEntries);
-    
-    const now = new Date().toLocaleString();
-    const schoolId3 = useAuthStore.getState().user?.schoolId;
-    const ttKey3 = schoolId3 ? `mock_timetable_${schoolId3}` : "mock_timetable";
-    const ttAtKey3 = schoolId3 ? `mock_timetable_updated_at_${schoolId3}` : "mock_timetable_updated_at";
-    localStorage.setItem(ttKey3, JSON.stringify(newEntries));
-    localStorage.setItem(ttAtKey3, now);
+    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     setLastUpdated(now);
-    
     toast.info("Slot cleared");
   };
 
@@ -300,10 +333,9 @@ export default function TimetablePage() {
     setIsEditingPeriods(true);
   };
 
-  const savePeriods = () => {
+  const savePeriods = async () => {
     setPeriods(tempPeriods);
-    const pKey = user?.schoolId ? `mock_periods_${user.schoolId}` : "mock_periods";
-    localStorage.setItem(pKey, JSON.stringify(tempPeriods));
+    await savePeriodsAsync(tempPeriods, user?.schoolId);
     setIsEditingPeriods(false);
     toast.success("Timings updated successfully!");
   };
@@ -454,12 +486,15 @@ export default function TimetablePage() {
                 <input
                   type="checkbox"
                   checked={globalAllowTeachersEdit}
-                  onChange={(e) => {
+                  onChange={async (e) => {
                     const checked = e.target.checked;
                     setGlobalAllowTeachersEdit(checked);
-                    const tKey = user?.schoolId ? `mock_allow_teachers_edit_${user.schoolId}` : "mock_allow_teachers_edit";
-                    localStorage.setItem(tKey, checked.toString());
-                    toast.success(checked ? "Class teachers can now manage their timetables" : "Class teacher management disabled");
+                    try {
+                      await updateTimetableSettings(checked, user?.schoolId);
+                      toast.success(checked ? "Class teachers can now manage their timetables" : "Class teacher management disabled");
+                    } catch (err: any) {
+                      toast.error(err?.response?.data?.message || "Failed to update settings");
+                    }
                   }}
                   className="sr-only"
                 />
@@ -907,12 +942,12 @@ export default function TimetablePage() {
       <ConfirmModal
         isOpen={isResetModalOpen}
         onClose={() => setIsResetModalOpen(false)}
-        onConfirm={() => {
-          const schoolId4 = useAuthStore.getState().user?.schoolId;
-          const ttKey4 = schoolId4 ? `mock_timetable_${schoolId4}` : "mock_timetable";
-          const ttAtKey4 = schoolId4 ? `mock_timetable_updated_at_${schoolId4}` : "mock_timetable_updated_at";
-          localStorage.removeItem(ttKey4);
-          localStorage.removeItem(ttAtKey4);
+        onConfirm={async () => {
+          for (const entry of entries) {
+            try {
+              await deleteTimetableSlot(entry.id);
+            } catch {}
+          }
           setEntries([]);
           setLastUpdated(null);
           setIsResetModalOpen(false);

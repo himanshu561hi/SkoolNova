@@ -8,13 +8,17 @@ import { useAuthStore } from "@/features/auth/store/authStore";
 export default function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
-  const { notifications, getUnreadCount, markAsRead, markAllAsRead, removeNotification, clear } = useNotificationStore();
+  const { notifications, fetchNotifications, getUnreadCount, markAsRead, markAllAsRead, removeNotification, clear } = useNotificationStore();
   const { user } = useAuthStore();
   
   const currentSchoolId = user?.schoolId || "school-1";
   const myNotifications = notifications.filter(n => n.schoolId === currentSchoolId);
   const unreadCount = getUnreadCount();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
 
   // Close panel on outside click
   useEffect(() => {

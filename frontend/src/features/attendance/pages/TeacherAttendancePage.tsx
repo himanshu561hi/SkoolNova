@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { useLocation } from "react-router-dom";
 import { getStudents } from "@/features/student/services/student.service";
+import { getTimetableSlots } from "@/features/timetable/services/timetable.service";
 import {
+  fetchAttendanceRecordsAsync,
   getAttendanceRecords,
   saveAttendanceRecords,
   updateAttendanceRecord,
@@ -103,20 +105,24 @@ export default function TeacherAttendancePage() {
   const qpPeriod = qp.get("period") !== null ? Number(qp.get("period")) : -1;
 
   const refreshRecords = useCallback(() => {
-    setAllRecords(getAttendanceRecords(user?.schoolId));
+    fetchAttendanceRecordsAsync({ schoolId: user?.schoolId }).then((records) => {
+      setAllRecords(records);
+    });
   }, [user]);
 
   useEffect(() => {
     if (!user) return;
-    // Load timetable
-    const timetableKey = user.schoolId
-      ? `mock_timetable_${user.schoolId}`
-      : "mock_timetable";
-    const saved = localStorage.getItem(timetableKey);
-    if (saved) {
-      const entries: TimetableEntry[] = JSON.parse(saved);
-      const mine = entries.filter((e) => e.teacherId === user.id);
-      setMyEntries(mine);
+    // Load timetable from MongoDB database
+    getTimetableSlots(user.schoolId, undefined, user.id).then((slots) => {
+      const entries: TimetableEntry[] = slots.map((s) => ({
+        id: s.id,
+        className: s.className,
+        day: s.day,
+        periodIndex: s.periodIndex,
+        teacherId: s.teacherId,
+        subject: s.subject,
+      }));
+      setMyEntries(entries);
       // Priority 1: query params from dashboard button
       if (qpClass) {
         setSelClass(qpClass);
@@ -125,21 +131,21 @@ export default function TeacherAttendancePage() {
         else setSelPeriod(getCurrentPeriodIndex(user?.schoolId));
       } else {
         // Priority 2: today's first entry or auto-detect period
-        const todayEntries = mine.filter((e) => e.day === todayDay);
+        const todayEntries = entries.filter((e) => e.day === todayDay);
         if (todayEntries.length > 0) {
           setSelClass(todayEntries[0].className);
           setSelSubject(todayEntries[0].subject || "");
           setSelPeriod(getCurrentPeriodIndex(user?.schoolId));
-        } else if (mine.length > 0) {
-          setSelClass(mine[0].className);
-          setSelSubject(mine[0].subject || "");
+        } else if (entries.length > 0) {
+          setSelClass(entries[0].className);
+          setSelSubject(entries[0].subject || "");
           setSelPeriod(getCurrentPeriodIndex(user?.schoolId));
         }
       }
-    }
+    });
     getStudents(user.schoolId).then((s) => setStudents(s));
     refreshRecords();
-  }, [user, todayDay, refreshRecords]);
+  }, [user, todayDay, refreshRecords, qpClass, qpSubject, qpPeriod]);
 
   // Get students for selected class
   const classStudents = students.filter((s) => s.className === selClass);

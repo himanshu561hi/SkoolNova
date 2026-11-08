@@ -22,8 +22,15 @@ import FormError from "@/components/ui/FormError";
 import ModalActions from "@/components/ui/ModalAction";
 
 import type { TeacherFormValues } from "../schemas/teacherSchema";
-import { getClassSubjects } from "@/features/student/services/class-subjects.service";
+import { getClassSubjectsAsync } from "@/features/student/services/class-subjects.service";
 import { useAuthStore } from "@/features/auth/store/authStore";
+
+const DEFAULT_SUBJECTS = [
+  "English", "Hindi", "Mathematics", "Science", "Social Science",
+  "Physics", "Chemistry", "Biology", "Computer Science",
+  "Accountancy", "Business Studies", "Economics", "History", "Geography",
+  "Physical Education", "Art & Craft", "EVS", "Moral Science", "Music", "Sanskrit"
+];
 
 type TeacherFormProps = {
   register: UseFormRegister<TeacherFormValues>;
@@ -66,17 +73,28 @@ function TeacherForm({
   isEditing,
 }: TeacherFormProps) {
   const { user } = useAuthStore();
-  const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
+  const [availableSubjects, setAvailableSubjects] = useState<string[]>(DEFAULT_SUBJECTS);
   const [isSubjectDropdownOpen, setIsSubjectDropdownOpen] = useState(false);
+  const [customSubjectInput, setCustomSubjectInput] = useState("");
 
   useEffect(() => {
-    const subjectsMap = getClassSubjects(user?.schoolId);
-    const allSubjects = new Set<string>();
-    Object.values(subjectsMap).forEach((subs) => {
-      subs.forEach((s) => allSubjects.add(s));
-    });
-    setAvailableSubjects(Array.from(allSubjects).sort());
-  }, []);
+    const loadSubjects = async () => {
+      const allSubjects = new Set<string>(DEFAULT_SUBJECTS);
+      try {
+        const subjectsMap = await getClassSubjectsAsync(user?.schoolId);
+        Object.values(subjectsMap).forEach((subs) => {
+          if (Array.isArray(subs)) {
+            subs.forEach((s) => allSubjects.add(s.trim()));
+          }
+        });
+      } catch (err) {
+        console.warn("Could not load class subjects from DB, using defaults", err);
+      }
+      setAvailableSubjects(Array.from(allSubjects).filter(Boolean).sort());
+    };
+
+    loadSubjects();
+  }, [user?.schoolId]);
 
   const rawSubject = watch("subject") || "";
   let selectedSubjects: string[] = [];
@@ -105,6 +123,16 @@ function TeacherForm({
         shouldValidate: true,
       });
     }
+  };
+
+  const handleAddCustomSubject = () => {
+    const trimmed = customSubjectInput.trim();
+    if (!trimmed) return;
+    if (!availableSubjects.includes(trimmed)) {
+      setAvailableSubjects(prev => [trimmed, ...prev].sort());
+    }
+    toggleSubject(trimmed);
+    setCustomSubjectInput("");
   };
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
@@ -194,32 +222,56 @@ function TeacherForm({
             </div>
 
             {isSubjectDropdownOpen && (
-              <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                {availableSubjects.length === 0 ? (
-                  <div className="p-3 text-sm text-slate-500 italic text-center">
-                    No subjects available. Add them in the Student section.
-                  </div>
-                ) : (
-                  availableSubjects.map((sub) => {
-                    const isSelected = selectedSubjects.includes(sub);
-                    return (
-                      <div
-                        key={sub}
-                        onClick={() => toggleSubject(sub)}
-                        className={`px-4 py-2 text-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center gap-2 ${isSelected ? "text-primary font-medium bg-primary/5 dark:bg-primary/10" : "text-slate-700 dark:text-slate-300"}`}
-                      >
+              <div className="absolute z-20 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95">
+                {/* Search / Add Custom Subject Input */}
+                <div className="p-2 border-b border-slate-100 dark:border-slate-700 flex gap-2 bg-slate-50/50 dark:bg-slate-900/50">
+                  <input
+                    type="text"
+                    value={customSubjectInput}
+                    onChange={(e) => setCustomSubjectInput(e.target.value)}
+                    placeholder="Search or type custom subject..."
+                    className="flex-1 text-xs px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 outline-none focus:ring-1 focus:ring-primary"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddCustomSubject();
+                      }
+                    }}
+                  />
+                  {customSubjectInput.trim() && (
+                    <button
+                      type="button"
+                      onClick={handleAddCustomSubject}
+                      className="px-2.5 py-1 bg-primary text-white text-xs font-semibold rounded-lg hover:bg-primary/90 transition shadow-sm"
+                    >
+                      + Add
+                    </button>
+                  )}
+                </div>
+
+                <div className="max-h-48 overflow-y-auto p-1">
+                  {availableSubjects
+                    .filter((s) => !customSubjectInput.trim() || s.toLowerCase().includes(customSubjectInput.toLowerCase()))
+                    .map((sub) => {
+                      const isSelected = selectedSubjects.includes(sub);
+                      return (
                         <div
-                          className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? "bg-primary border-primary" : "border-slate-300 dark:border-slate-600"}`}
+                          key={sub}
+                          onClick={() => toggleSubject(sub)}
+                          className={`px-3 py-2 text-sm rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center gap-2.5 ${isSelected ? "text-primary font-medium bg-primary/5 dark:bg-primary/10" : "text-slate-700 dark:text-slate-300"}`}
                         >
-                          {isSelected && (
-                            <span className="text-white text-[10px]">✓</span>
-                          )}
+                          <div
+                            className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${isSelected ? "bg-primary border-primary text-white" : "border-slate-300 dark:border-slate-600"}`}
+                          >
+                            {isSelected && (
+                              <span className="text-[10px] font-bold">✓</span>
+                            )}
+                          </div>
+                          <span>{sub}</span>
                         </div>
-                        {sub}
-                      </div>
-                    );
-                  })
-                )}
+                      );
+                    })}
+                </div>
               </div>
             )}
 

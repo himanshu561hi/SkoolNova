@@ -74,7 +74,7 @@ export default function StudentExamsPage() {
         <html><head><title>Admit Card - ${exam.title}</title></head>
         <body style="font-family:Arial,sans-serif;padding:40px;max-width:700px;margin:0 auto;position:relative;">
           <div style="text-align:center;border-bottom:3px solid #1a56db;padding-bottom:20px;margin-bottom:20px;">
-            <h1 style="margin:0;color:#1a56db;">${user.schoolName || "DigiSchool"}</h1>
+            <h1 style="margin:0;color:#1a56db;">${user.schoolName || "SkoolNova"}</h1>
             <h2 style="margin:8px 0 0;color:#333;">${exam.title}</h2>
             <p style="margin:5px 0 0;color:#666;">Admit Card</p>
           </div>
@@ -105,7 +105,7 @@ export default function StudentExamsPage() {
             <div style="text-align:center;"><div style="border-top:1px solid #333;padding-top:5px;width:150px;">Student Signature</div></div>
             <div style="text-align:center;"><div style="border-top:1px solid #333;padding-top:5px;width:150px;">Co-ordinator Signature</div></div>
           </div>
-          <p style="text-align:center;margin-top:30px;color:#999;font-size:12px;">This is a computer-generated admit card from ${user.schoolName || "DigiSchool"}.</p>
+          <p style="text-align:center;margin-top:30px;color:#999;font-size:12px;">This is a computer-generated admit card from ${user.schoolName || "SkoolNova"}.</p>
         </body></html>
       `;
       

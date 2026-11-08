@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import PageHeader from "@/components/shared/PageHeader";
-import { getLeaves, applyLeave } from "../services/leave.service";
+import { getLeavesAsync, applyLeave } from "../services/leave.service";
 import { LeaveApplication } from "../types/leave.types";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { getStudents } from "@/features/student/services/student.service";
@@ -26,7 +26,7 @@ export default function StudentLeavePage() {
       setStudentName(`${me.firstName} ${me.lastName}`);
       setClassName(me.className);
     }
-    const allLeaves = getLeaves(user.schoolId);
+    const allLeaves = await getLeavesAsync(user.schoolId);
     setLeaves(allLeaves.filter(l => l.applicantId === user.id).sort((a,b) => new Date(b.appliedOn).getTime() - new Date(a.appliedOn).getTime()));
   };
 
@@ -34,7 +34,7 @@ export default function StudentLeavePage() {
     loadData();
   }, [user]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     
@@ -44,8 +44,8 @@ export default function StudentLeavePage() {
     }
     
     setLoading(true);
-    setTimeout(() => {
-      applyLeave({
+    try {
+      await applyLeave({
         applicantId: user.id,
         applicantName: studentName,
         role: "STUDENT",
@@ -59,9 +59,12 @@ export default function StudentLeavePage() {
       toast.success("Leave application submitted successfully");
       setIsModalOpen(false);
       setFormData({ subject: "", startDate: "", endDate: "", description: "", documentUrl: "" });
-      loadData();
+      await loadData();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to submit leave application");
+    } finally {
       setLoading(false);
-    }, 800);
+    }
   };
 
   return (

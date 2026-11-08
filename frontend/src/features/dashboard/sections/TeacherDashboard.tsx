@@ -8,9 +8,11 @@ import FirstLoginCongrats from "../components/FirstLoginCongrats";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { toast } from "sonner";
 import { Clock, Users, BookOpen, Coffee, ClipboardCheck, CheckCircle2 } from "lucide-react";
-import { getAttendanceRecords } from "@/features/attendance/services/attendance.service";
+import { fetchAttendanceRecordsAsync } from "@/features/attendance/services/attendance.service";
 import type { AttendanceRecord } from "@/features/attendance/types/attendance.types";
 import { getTeachers } from "@/features/teacher/services/teacher.service";
+import { getTimetableSlots } from "@/features/timetable/services/timetable.service";
+import { fetchPeriodsAsync, DEFAULT_PERIODS, Period } from "@/features/timetable/utils/periods.utils";
 
 import type { AttendanceData } from "../types/dashboard.types";
 
@@ -26,17 +28,6 @@ type TimetableEntry = {
   periodIndex: number;
   teacherId: string;
 };
-
-type Period = { index: number; time: string; isLunch?: boolean };
-
-const DEFAULT_PERIODS: Period[] = [
-  { index: 0, time: "09:00 AM - 09:45 AM" },
-  { index: 1, time: "09:45 AM - 10:30 AM" },
-  { index: 2, time: "10:30 AM - 11:15 AM" },
-  { index: 3, time: "11:15 AM - 11:45 AM", isLunch: true },
-  { index: 4, time: "11:45 AM - 12:30 PM" },
-  { index: 5, time: "12:30 PM - 01:15 PM" },
-];
 
 type TimelineEvent = {
   id: string;
@@ -66,61 +57,52 @@ function TeacherDashboard({ attendance }: TeacherDashboardProps) {
       }
     });
     
-    // Load attendance records for today
-    const todayStr = new Date().toISOString().split("T")[0];
-    const myRecs = getAttendanceRecords(user.schoolId).filter(r => (r.teacherId === user.id || (r as any).markedByTeacherId === user.id) && r.date === todayStr);
-    setTodayRecords(myRecs);
+    const loadDashboardData = async () => {
+      // Load attendance records for today from DB
+      const todayStr = new Date().toISOString().split("T")[0];
+      const records = await fetchAttendanceRecordsAsync({ date: todayStr, schoolId: user.schoolId });
+      const myRecs = records.filter(
+        r => (r.teacherId === user.id || (r as any).markedByTeacherId === user.id) && r.date === todayStr
+      );
+      setTodayRecords(myRecs);
 
-    const pKey = user.schoolId ? `mock_periods_${user.schoolId}` : "mock_periods";
-    const savedPeriods = localStorage.getItem(pKey);
-    const currentPeriods: Period[] = savedPeriods ? JSON.parse(savedPeriods) : DEFAULT_PERIODS;
-
-    const ttKey = user.schoolId ? `mock_timetable_${user.schoolId}` : "mock_timetable";
-    const saved = localStorage.getItem(ttKey);
-    if (saved) {
-      const entries: TimetableEntry[] = JSON.parse(saved);
-      const myEntries = entries.filter((e) => e.teacherId === user.id);
-      
-      // Notification Logic
-      const lastCount = parseInt(localStorage.getItem(`last_assigned_count_${user.id}`) || "0");
-      if (myEntries.length > lastCount) {
-        toast.success("You have been assigned to new classes by the Manager!");
-        localStorage.setItem(`last_assigned_count_${user.id}`, myEntries.length.toString());
-      }
+      // Load periods & timetable slots from DB
+      const currentPeriods = await fetchPeriodsAsync(user.schoolId);
+      const myEntries = await getTimetableSlots(user.schoolId, undefined, user.id);
 
       setAllClassesCount(myEntries.length);
 
       // Get Today's Classes
       const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
       const currentDay = days[new Date().getDay()];
-      
       const todays = myEntries.filter(e => e.day === currentDay);
-      
+
       const events: TimelineEvent[] = [];
-      
-      currentPeriods.forEach(p => {
+      const effectivePeriods = currentPeriods.length > 0 ? currentPeriods : DEFAULT_PERIODS;
+
+      effectivePeriods.forEach(p => {
         if (p.isLunch) {
           events.push({ id: `lunch-${p.index}`, type: 'lunch', periodIndex: p.index, time: p.time });
         } else {
           const classEntry = todays.find(c => c.periodIndex === p.index);
           if (classEntry) {
-            events.push({ id: classEntry.id, type: 'class', periodIndex: p.index, time: p.time, className: classEntry.className, subject: classEntry.subject || "" });
+            events.push({
+              id: classEntry.id,
+              type: 'class',
+              periodIndex: p.index,
+              time: p.time,
+              className: classEntry.className,
+              subject: classEntry.subject || "",
+            });
           }
         }
       });
-      
+
       events.sort((a, b) => a.periodIndex - b.periodIndex);
       setTimelineEvents(events);
-    } else {
-      // If no timetable, at least show lunch
-      const events: TimelineEvent[] = [];
-      currentPeriods.forEach(p => {
-        if (p.isLunch) {
-          events.push({ id: `lunch-${p.index}`, type: 'lunch', periodIndex: p.index, time: p.time });
-        }
-      });
-      setTimelineEvents(events);
-    }
+    };
+
+    loadDashboardData();
   }, [user]);
 
   return (

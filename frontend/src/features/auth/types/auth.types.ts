@@ -1,8 +1,10 @@
 export type UserRole =
   | "SUPER_ADMIN"
   | "MANAGER"
+  | "SCHOOL_MANAGER"
   | "TEACHER"
-  | "STUDENT";
+  | "STUDENT"
+  | "PARENT";
 
 export type User = {
   id: string;
@@ -40,4 +42,14 @@ export type AuthResponse = {
   refreshToken: string;
 
   user: User;
+};
+
+export type ForgotPasswordPayload = {
+  email: string;
+};
+
+export type ResetPasswordPayload = {
+  email: string;
+  otp: string;
+  newPassword: string;
 };

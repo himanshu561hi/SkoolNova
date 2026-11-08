@@ -94,7 +94,7 @@ export default function ManagerExamsPage() {
 
   // ========= ADMIT CARD APPROVAL LOGIC =========
   const loadApprovals = async () => {
-    const stored = getAdmitApprovals(user?.schoolId);
+    const stored = await getAdmitApprovals(user?.schoolId);
     setApprovals(stored);
   };
 
@@ -109,7 +109,7 @@ export default function ManagerExamsPage() {
     if (titleExams.length === 0) return;
     
     const students = await getStudents(user?.schoolId);
-    const existingApprovals = getAdmitApprovals(user?.schoolId);
+    const existingApprovals = await getAdmitApprovals(user?.schoolId);
     let newApprovals: AdmitCardApproval[] = [];
     
     for (const exam of titleExams) {
@@ -140,8 +140,8 @@ export default function ManagerExamsPage() {
     setSelectedExamTitleForApproval(title);
   };
 
-  const handleToggleApproval = (studentId: string, examId: string, approved: boolean) => {
-    toggleAdmitApproval(studentId, examId, approved, user?.schoolId);
+  const handleToggleApproval = async (studentId: string, examId: string, approved: boolean) => {
+    await toggleAdmitApproval(studentId, examId, approved, user?.schoolId);
     setApprovals(prev => prev.map(a => 
       a.studentId === studentId && a.examId === examId ? { ...a, approved } : a
     ));

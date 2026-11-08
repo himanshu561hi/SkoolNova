@@ -3,12 +3,14 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import DashboardLayout from "@/layouts/DashboardLayout";
 import DashboardPage from "@/features/dashboard/pages/DashboardPage";
 import LoginPage from "@/features/auth/pages/LoginPage";
+import ForgotPasswordPage from "@/features/auth/pages/ForgotPasswordPage";
 import ChangePasswordPage from "@/features/auth/pages/ChangePasswordPage";
 import InactiveSchoolGuard from "../guards/InactiveSchoolGuard";
 import NotificationsPage from "@/features/notification/pages/NotificationsPage";
 import StudentsPage from "@/features/student/pages/StudentsPage";
 import { TeachersPage } from "@/features/teacher/pages/TeachersPage";
 import SchoolsPage from "@/features/superadmin/pages/SchoolsPage";
+import InquiriesPage from "@/features/superadmin/pages/InquiriesPage";
 import TimetablePage from "@/features/timetable/pages/TimetablePage";
 import AssignmentsPage from "@/features/assignments/pages/AssignmentsPage";
 import TeacherAttendancePage from "@/features/attendance/pages/TeacherAttendancePage";
@@ -19,6 +21,7 @@ import ScheduleExamPage from "@/features/exams/pages/ScheduleExamPage";
 import LeaveRouterPage from "@/features/leave/pages/LeaveRouterPage";
 
 import NotFoundPage from "@/pages/NotFoundPage";
+import HomePage from "@/pages/HomePage";
 
 import ProtectedRoute from "./ProtectedRoute";
 
@@ -41,7 +44,9 @@ function AppRouter() {
         {/* PUBLIC ROUTES */}
         {/* ========================= */}
 
+        <Route path={ROUTE_PATHS.HOME} element={<HomePage />} />
         <Route path={ROUTE_PATHS.LOGIN} element={<LoginPage />} />
+        <Route path={ROUTE_PATHS.FORGOT_PASSWORD} element={<ForgotPasswordPage />} />
         
         {/* ========================= */}
         {/* REQUIRE CHANGE PASSWORD */}
@@ -61,7 +66,6 @@ function AppRouter() {
         {/* ========================= */}
 
         <Route
-          path="/"
           element={
             <ProtectedRoute>
               <InactiveSchoolGuard>
@@ -70,10 +74,6 @@ function AppRouter() {
             </ProtectedRoute>
           }
         >
-          {/* DASHBOARD REDIRECT */}
-
-          <Route index element={<Navigate replace to={ROUTE_PATHS.DASHBOARD} />} />
-
           {/* DASHBOARD PAGE */}
           <Route path={ROUTE_PATHS.DASHBOARD} element={<DashboardPage />} />
 
@@ -104,6 +104,16 @@ function AppRouter() {
             element={
               <RoleGuard allowedRoles={["SUPER_ADMIN"]}>
                 <SchoolsPage />
+              </RoleGuard>
+            }
+          />
+
+          {/* INQUIRIES (SUPER ADMIN ONLY) */}
+          <Route
+            path={ROUTE_PATHS.INQUIRIES}
+            element={
+              <RoleGuard allowedRoles={["SUPER_ADMIN"]}>
+                <InquiriesPage />
               </RoleGuard>
             }
           />

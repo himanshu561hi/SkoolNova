@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import { devtools, persist } from 'zustand/middleware';
+import { devtools } from 'zustand/middleware';
+import apiClient from '@/lib/axios';
+import { useAuthStore } from '@/features/auth/store/authStore';
 
 export type NotificationType = "leave" | "homework" | "notice" | "complaint" | "message" | "attendance" | "result" | "fee" | "general";
 
@@ -9,13 +11,9 @@ export type AppNotification = {
   message: string;
   details?: string;
   targetRole: 'MANAGER' | 'TEACHER' | 'STUDENT' | 'ALL';
-  /** optional class identifier, e.g., "10A" */
   classId?: string;
-  /** optional specific student identifier */
   studentId?: string;
   createdAt: Date;
-  
-  // New fields for red dot architecture
   type: NotificationType;
   isRead: boolean;
   link?: string;
@@ -24,16 +22,11 @@ export type AppNotification = {
 
 type NotificationState = {
   notifications: AppNotification[];
-  /** Add a new notification */
+  fetchNotifications: () => Promise<void>;
   addNotification: (notification: Omit<AppNotification, 'id' | 'createdAt' | 'isRead'>) => void;
-  /** Clear all notifications */
   clear: () => void;
-  /** Remove a specific notification by ID */
   removeNotification: (id: string) => void;
-  /** Clear all notifications for a specific role */
   clearRoleNotifications: (role: string) => void;
-  
-  // New methods for Red Dot Architecture
   markAsRead: (id: string) => void;
   markModuleAsRead: (type: NotificationType) => void;
   markAllAsRead: () => void;
@@ -49,114 +42,122 @@ function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
+const getSchoolId = (): string | undefined => {
+  return useAuthStore.getState().user?.schoolId || undefined;
+};
+
 export const useNotificationStore = create<NotificationState>()(
   devtools(
-    persist(
-      (set, get) => ({
-        notifications: [],
-        addNotification: (payload: Omit<AppNotification, 'id' | 'createdAt' | 'isRead' | 'schoolId'>) => {
-          // Auto-attach current user's schoolId
-          const userStr = localStorage.getItem("user");
-          let currentSchoolId = "school-1";
-          if (userStr) {
-            try {
-              const userObj = JSON.parse(userStr);
-              if (userObj?.schoolId) currentSchoolId = userObj.schoolId;
-            } catch (e) {}
-          }
-          
-          const newNotification: AppNotification = {
-            id: generateId(),
-            createdAt: new Date(),
-            isRead: false,
-            schoolId: currentSchoolId,
-            ...payload,
-          };
-          set({ notifications: [newNotification, ...get().notifications] });
-        },
-        clear: () => {
-          const userStr = localStorage.getItem("user");
-          let currentSchoolId = "school-1";
-          if (userStr) {
-            try { currentSchoolId = JSON.parse(userStr)?.schoolId || "school-1"; } catch (e) {}
-          }
-          set({ 
-            notifications: get().notifications.filter(n => n.schoolId !== currentSchoolId) 
-          });
-        },
-        removeNotification: (id: string) => {
-          set({ notifications: get().notifications.filter(n => n.id !== id) });
-        },
-        clearRoleNotifications: (role: string) => {
-          const userStr = localStorage.getItem("user");
-          let currentSchoolId = "school-1";
-          if (userStr) {
-            try { currentSchoolId = JSON.parse(userStr)?.schoolId || "school-1"; } catch (e) {}
-          }
-          set({ 
-            notifications: get().notifications.filter(n => n.targetRole !== role || n.schoolId !== currentSchoolId) 
-          });
-        },
-        
-        markAsRead: (id: string) => {
-          set({
-            notifications: get().notifications.map((n) => 
-              n.id === id ? { ...n, isRead: true } : n
-            )
-          });
-        },
-        
-        markModuleAsRead: (type: NotificationType) => {
-          set({
-            notifications: get().notifications.map((n) => 
-              n.type === type ? { ...n, isRead: true } : n
-            )
-          });
-        },
-        
-        markAllAsRead: () => {
-          const userStr = localStorage.getItem("user");
-          let currentSchoolId = "school-1";
-          if (userStr) {
-            try { currentSchoolId = JSON.parse(userStr)?.schoolId || "school-1"; } catch (e) {}
-          }
-          set({
-            notifications: get().notifications.map((n) => 
-              n.schoolId === currentSchoolId ? { ...n, isRead: true } : n
-            )
-          });
-        },
-        
-        getUnreadCount: () => {
-          const userStr = localStorage.getItem("user");
-          let currentSchoolId = "school-1";
-          if (userStr) {
-            try { currentSchoolId = JSON.parse(userStr)?.schoolId || "school-1"; } catch (e) {}
-          }
-          return get().notifications.filter(n => !n.isRead && n.schoolId === currentSchoolId).length;
-        },
-        
-        getModuleUnreadCount: (type: NotificationType) => {
-          const userStr = localStorage.getItem("user");
-          let currentSchoolId = "school-1";
-          if (userStr) {
-            try { currentSchoolId = JSON.parse(userStr)?.schoolId || "school-1"; } catch (e) {}
-          }
-          return get().notifications.filter(n => n.type === type && !n.isRead && n.schoolId === currentSchoolId).length;
-        },
-        
-        hasUnreadInModule: (type: NotificationType) => {
-          const userStr = localStorage.getItem("user");
-          let currentSchoolId = "school-1";
-          if (userStr) {
-            try { currentSchoolId = JSON.parse(userStr)?.schoolId || "school-1"; } catch (e) {}
-          }
-          return get().notifications.some(n => n.type === type && !n.isRead && n.schoolId === currentSchoolId);
+    (set, get) => ({
+      notifications: [],
+
+      fetchNotifications: async () => {
+        try {
+          const res = await apiClient.get<{ success: boolean; data: any[] }>('/notifications');
+          const mapped: AppNotification[] = res.data.data.map((n) => ({
+            id: n.id,
+            title: n.title,
+            message: n.message,
+            type: n.type as NotificationType,
+            targetRole: n.targetRole,
+            classId: n.classId,
+            studentId: n.studentId,
+            isRead: n.isRead,
+            link: n.link,
+            schoolId: n.schoolId,
+            createdAt: new Date(n.createdAt),
+          }));
+          set({ notifications: mapped });
+        } catch (err) {
+          console.error('Failed to fetch notifications from backend', err);
         }
-      }),
-      {
-        name: 'mock_notifications', // key in localStorage
+      },
+
+      addNotification: (payload: Omit<AppNotification, 'id' | 'createdAt' | 'isRead' | 'schoolId'>) => {
+        const currentSchoolId = getSchoolId();
+        
+        const newNotification: AppNotification = {
+          id: generateId(),
+          createdAt: new Date(),
+          isRead: false,
+          schoolId: currentSchoolId,
+          ...payload
+        };
+
+        // Async post to API
+        apiClient.post('/notifications', {
+          title: newNotification.title,
+          message: newNotification.message,
+          type: newNotification.type,
+          targetRole: newNotification.targetRole,
+          targetClassId: newNotification.classId,
+          targetUserId: newNotification.studentId,
+          link: newNotification.link,
+          schoolId: currentSchoolId,
+        }).catch(() => {});
+        
+        set({ notifications: [newNotification, ...get().notifications] });
+      },
+
+      clear: () => {
+        const currentSchoolId = getSchoolId();
+        set({ 
+          notifications: get().notifications.filter(n => n.schoolId !== currentSchoolId) 
+        });
+      },
+
+      removeNotification: (id: string) => {
+        apiClient.delete(`/notifications/${id}`).catch(() => {});
+        set({ notifications: get().notifications.filter(n => n.id !== id) });
+      },
+
+      clearRoleNotifications: (role: string) => {
+        const currentSchoolId = getSchoolId();
+        set({ 
+          notifications: get().notifications.filter(n => n.targetRole !== role || (currentSchoolId && n.schoolId !== currentSchoolId)) 
+        });
+      },
+      
+      markAsRead: (id: string) => {
+        apiClient.patch(`/notifications/${id}/read`).catch(() => {});
+        set({
+          notifications: get().notifications.map((n) => 
+            n.id === id ? { ...n, isRead: true } : n
+          )
+        });
+      },
+      
+      markModuleAsRead: (type: NotificationType) => {
+        set({
+          notifications: get().notifications.map((n) => 
+            n.type === type ? { ...n, isRead: true } : n
+          )
+        });
+      },
+      
+      markAllAsRead: () => {
+        apiClient.patch('/notifications/read-all').catch(() => {});
+        const currentSchoolId = getSchoolId();
+        set({
+          notifications: get().notifications.map((n) => 
+            !currentSchoolId || n.schoolId === currentSchoolId ? { ...n, isRead: true } : n
+          )
+        });
+      },
+      
+      getUnreadCount: () => {
+        const currentSchoolId = getSchoolId();
+        return get().notifications.filter(n => !n.isRead && (!currentSchoolId || n.schoolId === currentSchoolId)).length;
+      },
+      
+      getModuleUnreadCount: (type: NotificationType) => {
+        const currentSchoolId = getSchoolId();
+        return get().notifications.filter(n => !n.isRead && n.type === type && (!currentSchoolId || n.schoolId === currentSchoolId)).length;
+      },
+      
+      hasUnreadInModule: (type: NotificationType) => {
+        return get().getModuleUnreadCount(type) > 0;
       }
-    )
+    })
   )
 );

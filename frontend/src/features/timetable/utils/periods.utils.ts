@@ -1,3 +1,5 @@
+import apiClient from "@/lib/axios";
+
 export type Period = { index: number; time: string; isLunch?: boolean };
 
 export const DEFAULT_PERIODS: Period[] = [
@@ -9,16 +11,66 @@ export const DEFAULT_PERIODS: Period[] = [
   { index: 5, time: "12:30 PM - 01:15 PM" },
 ];
 
-/** Load periods from localStorage (set by Manager in Timetable), fallback to defaults */
+/**
+ * In-memory fallback cache (NO localStorage)
+ */
+let inMemoryPeriods: Record<string, Period[]> = {};
+
+export const fetchPeriodsAsync = async (schoolId?: string): Promise<Period[]> => {
+  const key = schoolId || "default";
+  try {
+    const res = await apiClient.get<{ success: boolean; data: any[] }>("/academics/periods", {
+      params: schoolId ? { schoolId } : {},
+    });
+    if (res.data?.data && Array.isArray(res.data.data) && res.data.data.length > 0) {
+      const mapped: Period[] = res.data.data.map((p: any) => ({
+        index: p.index !== undefined ? p.index : p.periodIndex,
+        time: p.time || `${p.startTime || ""} - ${p.endTime || ""}`,
+        isLunch: Boolean(p.isLunch),
+      }));
+      inMemoryPeriods[key] = mapped;
+      return mapped;
+    }
+    return inMemoryPeriods[key] || DEFAULT_PERIODS;
+  } catch (err) {
+    console.error("Failed to fetch periods from backend:", err);
+    return inMemoryPeriods[key] || DEFAULT_PERIODS;
+  }
+};
+
+/** Load periods from in-memory cache, fallback to defaults */
 export const getStoredPeriods = (schoolId?: string): Period[] => {
-  const key = schoolId ? `mock_periods_${schoolId}` : "mock_periods";
-  const saved = localStorage.getItem(key);
-  return saved ? JSON.parse(saved) : DEFAULT_PERIODS;
+  const key = schoolId || "default";
+  if (inMemoryPeriods[key] && inMemoryPeriods[key].length > 0) {
+    return inMemoryPeriods[key];
+  }
+  fetchPeriodsAsync(schoolId);
+  return inMemoryPeriods[key] || DEFAULT_PERIODS;
+};
+
+export const savePeriodsAsync = async (periods: Period[], schoolId?: string): Promise<void> => {
+  const key = schoolId || "default";
+  inMemoryPeriods[key] = periods;
+  try {
+    await apiClient.put("/academics/periods", {
+      periods: periods.map((p) => {
+        const parts = p.time.split("-").map((s) => s.trim());
+        return {
+          index: p.index,
+          startTime: parts[0] || "",
+          endTime: parts[1] || "",
+          isLunch: Boolean(p.isLunch),
+        };
+      }),
+      schoolId,
+    });
+  } catch (err) {
+    console.error("Failed to save periods to backend:", err);
+  }
 };
 
 /** Parse a time string like "09:00 AM - 09:45 AM" → { startMin, endMin } */
 const parseTimeRange = (timeStr: string): { startMin: number; endMin: number } | null => {
-  // Expected format: "HH:MM AM/PM - HH:MM AM/PM"
   const parts = timeStr.split("-").map(s => s.trim());
   if (parts.length < 2) return null;
 
@@ -48,7 +100,6 @@ export const getCurrentPeriodIndex = (schoolId?: string): number => {
       return p.index;
     }
   }
-  // Default: first non-lunch period
   return periods[0]?.index ?? 0;
 };
 
@@ -59,7 +110,7 @@ export const isPeriodAvailableForAttendance = (periodIndex: number, schoolId?: s
   if (!period || period.isLunch) return false;
 
   const range = parseTimeRange(period.time);
-  if (!range) return true; // fallback: allow
+  if (!range) return true;
 
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();

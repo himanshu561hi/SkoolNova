@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { BookOpen, Plus, X, Save, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/features/auth/store/authStore";
-import { getClassSubjects, saveClassSubjects, getClasses, saveClasses } from "../services/class-subjects.service";
+import { getClassSubjectsAsync, saveClassSubjects, getClassesAsync, saveClasses } from "../services/class-subjects.service";
 
 const STANDARD_SUBJECTS = [
   "English", "Hindi", "Mathematics", "Science", "Social Science",
@@ -13,7 +13,7 @@ const STANDARD_SUBJECTS = [
 
 export default function ClassSubjectsSection() {
   const { user } = useAuthStore();
-  const isManager = user?.role === "MANAGER";
+  const isManager = user?.role === "MANAGER" || user?.role === "SCHOOL_MANAGER";
 
   const [mapping, setMapping] = useState<Record<string, string[]>>({});
   const [classes, setClasses] = useState<string[]>([]);
@@ -31,11 +31,16 @@ export default function ClassSubjectsSection() {
   const [isAddingClass, setIsAddingClass] = useState(false);
 
   useEffect(() => {
-    // Load existing data from local storage
-    const loadedClasses = getClasses(user?.schoolId);
-    const loadedMapping = getClassSubjects(user?.schoolId);
-    setClasses(loadedClasses);
-    setMapping(loadedMapping);
+    // Load existing data from DB
+    const loadData = async () => {
+      const [loadedClasses, loadedMapping] = await Promise.all([
+        getClassesAsync(user?.schoolId),
+        getClassSubjectsAsync(user?.schoolId),
+      ]);
+      setClasses(loadedClasses);
+      setMapping(loadedMapping);
+    };
+    loadData();
   }, [user?.schoolId]);
 
 const handleAddClass = () => {

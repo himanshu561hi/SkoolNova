@@ -14,8 +14,11 @@ export function hasPermission(
     return false;
   }
 
-  const normalizedRole = role.trim().toUpperCase() as UserRole;
-  const permissions = ROLE_PERMISSIONS[normalizedRole];
+  let effectiveRole = role.trim().toUpperCase() as string;
+  if (effectiveRole === 'PRINCIPAL' || effectiveRole === 'DIRECTOR' || effectiveRole === 'MANAGER') {
+    effectiveRole = 'SCHOOL_MANAGER';
+  }
+  const permissions = ROLE_PERMISSIONS[effectiveRole as UserRole] || ROLE_PERMISSIONS.SCHOOL_MANAGER;
 
   if (!Array.isArray(permissions)) {
     return false;

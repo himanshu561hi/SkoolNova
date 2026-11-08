@@ -1,0 +1,33 @@
+import { FastifyPluginAsync } from 'fastify';
+import { authRoutes, profileRoutes } from '../modules/auth/auth.routes.js';
+import { schoolsRoutes } from '../modules/schools/schools.routes.js';
+import { studentsRoutes } from '../modules/students/students.routes.js';
+import { teachersRoutes } from '../modules/teachers/teachers.routes.js';
+import { academicsRoutes } from '../modules/academics/academics.routes.js';
+import { timetableRoutes } from '../modules/timetable/timetable.routes.js';
+import { attendanceRoutes } from '../modules/attendance/attendance.routes.js';
+import { assignmentsRoutes } from '../modules/assignments/assignments.routes.js';
+import { uploadsRoutes } from '../modules/uploads/uploads.routes.js';
+import { examsRoutes } from '../modules/exams/exams.routes.js';
+import { leavesRoutes } from '../modules/leaves/leaves.routes.js';
+import { notificationsRoutes } from '../modules/notifications/notifications.routes.js';
+import { dashboardRoutes } from '../modules/dashboard/dashboard.routes.js';
+import { inquiriesRoutes } from '../modules/inquiries/inquiries.routes.js';
+
+export const apiRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.register(authRoutes, { prefix: '/auth' });
+  fastify.register(profileRoutes, { prefix: '/profile' });
+  fastify.register(schoolsRoutes, { prefix: '/schools' });
+  fastify.register(studentsRoutes, { prefix: '/students' });
+  fastify.register(teachersRoutes, { prefix: '/teachers' });
+  fastify.register(academicsRoutes, { prefix: '/academics' });
+  fastify.register(timetableRoutes, { prefix: '/timetable' });
+  fastify.register(attendanceRoutes, { prefix: '/attendance' });
+  fastify.register(assignmentsRoutes, { prefix: '/assignments' });
+  fastify.register(uploadsRoutes, { prefix: '/uploads' });
+  fastify.register(examsRoutes, { prefix: '/exams' });
+  fastify.register(leavesRoutes, { prefix: '/leaves' });
+  fastify.register(notificationsRoutes, { prefix: '/notifications' });
+  fastify.register(dashboardRoutes, { prefix: '/dashboard' });
+  fastify.register(inquiriesRoutes, { prefix: '/inquiries' });
+};

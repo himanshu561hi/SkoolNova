@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, School } from "lucide-react";
 
 import { SIDEBAR_CONFIG } from "@/config/sidebarConfig";
 
@@ -37,8 +37,11 @@ function Sidebar({ collapsed, onToggle }: SidebarProps) {
   /* SIDEBAR ITEMS */
   /* ========================= */
 
-  const normalizedRole = role?.trim().toUpperCase() as keyof typeof SIDEBAR_CONFIG | undefined;
-  const sidebarItems = normalizedRole ? (SIDEBAR_CONFIG[normalizedRole] || []) : [];
+  const normalizedRole = role?.trim().toUpperCase() as string | undefined;
+  let sidebarItems = normalizedRole ? (SIDEBAR_CONFIG[normalizedRole as keyof typeof SIDEBAR_CONFIG] || []) : [];
+  if (sidebarItems.length === 0 && (normalizedRole === 'PRINCIPAL' || normalizedRole === 'DIRECTOR' || normalizedRole === 'MANAGER')) {
+    sidebarItems = SIDEBAR_CONFIG.SCHOOL_MANAGER || [];
+  }
 
   /* ========================= */
   /* FILTERED ITEMS */
@@ -66,18 +69,32 @@ function Sidebar({ collapsed, onToggle }: SidebarProps) {
       {/* LOGO */}
       {/* ========================= */}
 
-      <div className="border-b border-slate-200 px-6 py-8 dark:border-slate-800">
+      <div className="border-b border-slate-200 px-6 py-6 dark:border-slate-800">
         {!collapsed ? (
           <>
-            <h1 className="text-4xl font-bold text-primary">School ERP</h1>
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-slate-950 via-slate-800 to-slate-900 text-white flex items-center justify-center shadow-md shadow-slate-950/10">
+                <School className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <h1 className="text-xl font-extrabold tracking-tight text-slate-950 dark:text-white">
+                  SkoolNova
+                </h1>
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 uppercase tracking-wider">
+                  ERP
+                </span>
+              </div>
+            </div>
 
-            <p className="mt-2 text-slate-500 dark:text-slate-400 font-medium">
-              {user?.schoolName || (role === "SUPER_ADMIN" ? "DigiSchool Admin" : "Enterprise Portal")}
+            <p className="mt-2.5 text-xs text-slate-500 dark:text-slate-400 font-bold tracking-tight truncate">
+              {user?.schoolName || (role === "SUPER_ADMIN" ? "Central Admin" : "Campus Portal")}
             </p>
           </>
         ) : (
           <div className="flex justify-center">
-            <h1 className="text-3xl font-bold text-primary">ERP</h1>
+            <div className="w-9 h-9 rounded-xl bg-slate-950 text-white flex items-center justify-center shadow-sm">
+              <School className="w-5 h-5 text-white" />
+            </div>
           </div>
         )}
       </div>

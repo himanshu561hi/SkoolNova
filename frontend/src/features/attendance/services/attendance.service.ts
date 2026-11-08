@@ -1,59 +1,103 @@
+import apiClient from "@/lib/axios";
 import type { AttendanceRecord } from "../types/attendance.types";
 
-const getStudentAttendanceKey = (schoolId?: string) => schoolId ? `mock_student_attendance_${schoolId}` : "mock_student_attendance";
-const getTeacherAttendanceKey = (schoolId?: string) => schoolId ? `mock_teacher_attendance_${schoolId}` : "mock_teacher_attendance";
+/**
+ * In-memory fallback cache (NOT localStorage) to prevent unnecessary re-fetching while in-session
+ */
+let inMemoryStudentAttendance: AttendanceRecord[] = [];
+let inMemoryTeacherAttendance: any[] = [];
 
-export const getAttendanceRecords = (schoolId?: string): AttendanceRecord[] => {
-  const data = localStorage.getItem(getStudentAttendanceKey(schoolId));
-  return data ? JSON.parse(data) : [];
+export const getAttendanceRecords = (_schoolId?: string): AttendanceRecord[] => {
+  return inMemoryStudentAttendance;
 };
 
-export const getTeacherAttendanceRecords = (schoolId?: string): any[] => {
-  const data = localStorage.getItem(getTeacherAttendanceKey(schoolId));
-  return data ? JSON.parse(data) : [];
+export const fetchAttendanceRecordsAsync = async (
+  filters?: { date?: string; className?: string; subject?: string; periodIndex?: number; schoolId?: string }
+): Promise<AttendanceRecord[]> => {
+  try {
+    const res = await apiClient.get<{ success: boolean; data: AttendanceRecord[] }>(
+      "/attendance/students",
+      { params: filters }
+    );
+    inMemoryStudentAttendance = res.data.data;
+    return res.data.data;
+  } catch (err) {
+    console.error("Failed to fetch student attendance from DB", err);
+    return inMemoryStudentAttendance;
+  }
 };
 
-export const saveTeacherAttendanceRecords = (newRecords: any[], schoolId?: string) => {
-  const existing = getTeacherAttendanceRecords(schoolId);
-  // Upsert logic for teacher attendance (date + teacherId)
-  const updated = [...existing];
+export const getTeacherAttendanceRecords = (_schoolId?: string): any[] => {
+  return inMemoryTeacherAttendance;
+};
+
+export const fetchTeacherAttendanceAsync = async (date?: string, schoolId?: string): Promise<any[]> => {
+  try {
+    const res = await apiClient.get<{ success: boolean; data: any[] }>("/attendance/teachers", {
+      params: { date, schoolId },
+    });
+    inMemoryTeacherAttendance = res.data.data;
+    return res.data.data;
+  } catch (err) {
+    console.error("Failed to fetch teacher attendance from DB", err);
+    return inMemoryTeacherAttendance;
+  }
+};
+
+export const saveTeacherAttendanceRecords = async (newRecords: any[], schoolId?: string) => {
+  // Update in-memory state
   newRecords.forEach(nr => {
-    const idx = updated.findIndex(r => r.teacherId === nr.teacherId && r.date === nr.date);
-    if (idx >= 0) updated[idx] = nr;
-    else updated.push(nr);
+    const idx = inMemoryTeacherAttendance.findIndex(r => r.teacherId === nr.teacherId && r.date === nr.date);
+    if (idx >= 0) inMemoryTeacherAttendance[idx] = nr;
+    else inMemoryTeacherAttendance.push(nr);
   });
-  localStorage.setItem(getTeacherAttendanceKey(schoolId), JSON.stringify(updated));
+
+  // Save directly to MongoDB database
+  if (newRecords.length > 0) {
+    const date = newRecords[0].date;
+    await apiClient.post("/attendance/teachers", {
+      date,
+      records: newRecords.map(r => ({ teacherId: r.teacherId, status: r.status })),
+      schoolId,
+    });
+  }
 };
 
-const saveAll = (records: AttendanceRecord[], schoolId?: string) => {
-  localStorage.setItem(getStudentAttendanceKey(schoolId), JSON.stringify(records));
-};
-
-export const saveAttendanceRecords = (newRecords: AttendanceRecord[], schoolId?: string) => {
-  const existing = getAttendanceRecords(schoolId);
-  // Upsert: match on studentId + date + subject + periodIndex
-  const updated = [...existing];
+export const saveAttendanceRecords = async (newRecords: AttendanceRecord[], schoolId?: string) => {
+  // Update in-memory state
   newRecords.forEach(nr => {
-    const idx = updated.findIndex(r =>
+    const idx = inMemoryStudentAttendance.findIndex(r =>
       r.studentId === nr.studentId &&
       r.date === nr.date &&
       r.subject === nr.subject &&
       r.periodIndex === nr.periodIndex
     );
-    if (idx >= 0) updated[idx] = nr;
-    else updated.push(nr);
+    if (idx >= 0) inMemoryStudentAttendance[idx] = nr;
+    else inMemoryStudentAttendance.push(nr);
   });
-  saveAll(updated, schoolId);
+
+  // Save directly to MongoDB database
+  if (newRecords.length > 0) {
+    const first = newRecords[0];
+    await apiClient.post("/attendance/students", {
+      date: first.date,
+      className: first.className,
+      subject: first.subject,
+      periodIndex: first.periodIndex,
+      records: newRecords.map(r => ({
+        studentId: r.studentId,
+        status: r.status,
+        remarks: r.remarks,
+      })),
+      schoolId,
+    });
+  }
 };
 
-export const updateAttendanceRecord = (updated: AttendanceRecord, schoolId?: string) => {
-  const records = getAttendanceRecords(schoolId);
-  const idx = records.findIndex(r => r.id === updated.id);
-  if (idx >= 0) records[idx] = updated;
-  saveAll(records, schoolId);
+export const updateAttendanceRecord = async (updated: AttendanceRecord, schoolId?: string) => {
+  await saveAttendanceRecords([updated], schoolId);
 };
 
-/** Get attendance for a specific date, class, subject, period */
 export const getAttendanceForSession = (
   date: string,
   className: string,
@@ -61,30 +105,28 @@ export const getAttendanceForSession = (
   periodIndex: number,
   schoolId?: string
 ): AttendanceRecord[] => {
-  return getAttendanceRecords(schoolId).filter(
+  return inMemoryStudentAttendance.filter(
     r => r.date === date && r.className === className && r.subject === subject && r.periodIndex === periodIndex
   );
 };
 
-/** Get average attendance % for a student across all subjects in current year */
-export const getStudentAverageAttendance = (studentId: string, schoolId?: string): number => {
+export const getStudentAverageAttendance = (studentId: string, _schoolId?: string): number => {
   const currentYear = new Date().getFullYear();
-  const records = getAttendanceRecords(schoolId).filter(r => {
+  const records = inMemoryStudentAttendance.filter(r => {
     return r.studentId === studentId && new Date(r.date).getFullYear() === currentYear;
   });
-  if (records.length === 0) return 0;
+  if (records.length === 0) return 100;
   const presentCount = records.filter(r => r.status === "PRESENT" || r.status === "LATE").length;
   return Math.round((presentCount / records.length) * 100);
 };
 
-/** Export CSV for a class/subject */
 export const exportAttendanceCSV = (
   className: string,
   subject?: string,
-  teacherName?: string,
-  schoolId?: string
+  _teacherName?: string,
+  _schoolId?: string
 ): void => {
-  let records = getAttendanceRecords(schoolId).filter(r => r.className === className);
+  let records = inMemoryStudentAttendance.filter(r => r.className === className);
   if (subject) records = records.filter(r => r.subject === subject);
   if (records.length === 0) {
     alert("No attendance records to export.");

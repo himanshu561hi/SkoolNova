@@ -4,10 +4,12 @@ import { getAssignments, saveAssignment, deleteAssignment, getSubmissions, saveS
 import type { Assignment, AssignmentSubmission } from "../types/assignment.types";
 import { getStudents } from "@/features/student/services/student.service";
 import { getTeachers } from "@/features/teacher/services/teacher.service";
+import { getTimetableSlots } from "@/features/timetable/services/timetable.service";
 import { toast } from "sonner";
 import { BookOpen, Plus, FileText, Trash2, ChevronDown, ChevronUp, CheckCircle, Clock, Paperclip, Download, Eye, History } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import { useNotificationStore } from "@/features/notification/store/notificationStore";
+import { uploadFile } from "@/services/upload.service";
 
 // Helper: is assignment overdue?
 const isOverdue = (dueDate: string) => new Date(dueDate) < new Date();
@@ -49,21 +51,19 @@ export default function TeacherAssignmentsPage() {
         setBaseSubjects(subjects);
       }
     });
-    const ttKey = user.schoolId ? `mock_timetable_${user.schoolId}` : "mock_timetable";
-    const savedTimetable = localStorage.getItem(ttKey);
-    if (savedTimetable) {
-      const entries = JSON.parse(savedTimetable);
-      const myEntries = entries.filter((e: any) => e.teacherId === user.id);
-      const uniqueClasses = Array.from(new Set(myEntries.map((e: any) => e.className))) as string[];
+    // Load timetable from MongoDB database
+    getTimetableSlots(user.schoolId, undefined, user.id).then((slots) => {
+      const myEntries = slots.filter((e) => e.teacherId === user.id);
+      const uniqueClasses = Array.from(new Set(myEntries.map((e) => e.className))) as string[];
       setTeacherClasses(uniqueClasses.sort());
       const map: Record<string, string[]> = {};
-      myEntries.forEach((e: any) => {
+      myEntries.forEach((e) => {
         if (!map[e.className]) map[e.className] = [];
         if (e.subject && !map[e.className].includes(e.subject)) map[e.className].push(e.subject);
       });
       setClassSubjectsMap(map);
       if (uniqueClasses.length > 0) setNewClass(uniqueClasses[0]);
-    }
+    });
     refreshData();
   }, [user]);
 

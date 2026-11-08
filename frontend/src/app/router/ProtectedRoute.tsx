@@ -50,7 +50,12 @@ function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   if (allowedRoles && user?.role) {
     const normalizedRole = user.role.trim().toUpperCase();
     const normalizedAllowedRoles = allowedRoles.map((r) => r.trim().toUpperCase());
-    if (!normalizedAllowedRoles.includes(normalizedRole)) {
+    const isAllowed =
+      normalizedAllowedRoles.includes(normalizedRole) ||
+      (normalizedRole === "SCHOOL_MANAGER" && normalizedAllowedRoles.includes("MANAGER")) ||
+      (normalizedRole === "MANAGER" && normalizedAllowedRoles.includes("SCHOOL_MANAGER"));
+
+    if (!isAllowed) {
       return <Navigate replace to={ROUTE_PATHS.LOGIN} />;
     }
   }

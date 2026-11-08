@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import PageHeader from "@/components/shared/PageHeader";
-import { getLeaves, applyLeave, updateLeaveStatus } from "../services/leave.service";
+import { getLeavesAsync, applyLeave, updateLeaveStatus } from "../services/leave.service";
 import { LeaveApplication } from "../types/leave.types";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { getStudents } from "@/features/student/services/student.service";
@@ -25,15 +25,14 @@ export default function TeacherLeavePage() {
   const [remark, setRemark] = useState("");
   const [actionType, setActionType] = useState<"APPROVED" | "REJECTED" | null>(null);
 
-  const loadData = () => {
+  const loadData = async () => {
     if (!user) return;
-    const allLeaves = getLeaves(user.schoolId);
+    const allLeaves = await getLeavesAsync(user.schoolId);
     
     // My Leaves
     setMyLeaves(allLeaves.filter(l => l.applicantId === user.id).sort((a,b) => new Date(b.appliedOn).getTime() - new Date(a.appliedOn).getTime()));
     
-    // Student Leaves (assuming the teacher is interested in all students for now, or you can filter by their assigned class)
-    // Teacher should only approve leaves that are PENDING_TEACHER (or see their history)
+    // Student Leaves
     setStudentLeaves(allLeaves.filter(l => l.role === "STUDENT").sort((a,b) => new Date(b.appliedOn).getTime() - new Date(a.appliedOn).getTime()));
   };
 
@@ -41,7 +40,7 @@ export default function TeacherLeavePage() {
     loadData();
   }, [user]);
 
-  const handleApplyLeave = (e: React.FormEvent) => {
+  const handleApplyLeave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     
@@ -51,8 +50,8 @@ export default function TeacherLeavePage() {
     }
     
     setLoading(true);
-    setTimeout(() => {
-      applyLeave({
+    try {
+      await applyLeave({
         applicantId: user.id,
         applicantName: `${user.firstName} ${user.lastName}`,
         role: "TEACHER",
@@ -65,9 +64,12 @@ export default function TeacherLeavePage() {
       toast.success("Leave application submitted successfully to Manager");
       setIsApplyModalOpen(false);
       setFormData({ subject: "", startDate: "", endDate: "", description: "", documentUrl: "" });
-      loadData();
+      await loadData();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to submit leave application");
+    } finally {
       setLoading(false);
-    }, 800);
+    }
   };
 
   const handleActionClick = (leave: LeaveApplication, action: "APPROVED" | "REJECTED") => {
@@ -77,17 +79,21 @@ export default function TeacherLeavePage() {
     setIsActionModalOpen(true);
   };
 
-  const handleConfirmAction = (e: React.FormEvent) => {
+  const handleConfirmAction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeLeave || !actionType || !user) return;
 
-    // When Teacher approves, it goes to PENDING_MANAGER
-    const nextStatus = actionType === "APPROVED" ? "PENDING_MANAGER" : "REJECTED";
-    updateLeaveStatus(activeLeave.id, nextStatus, remark, `${user.firstName} ${user.lastName}`, "teacherRemark", user.schoolId);
-    
-    toast.success(`Leave ${actionType === 'APPROVED' ? 'forwarded to Manager' : 'rejected'} successfully`);
-    setIsActionModalOpen(false);
-    loadData();
+    try {
+      // When Teacher approves, it goes to PENDING_MANAGER
+      const nextStatus = actionType === "APPROVED" ? "PENDING_MANAGER" : "REJECTED";
+      await updateLeaveStatus(activeLeave.id, nextStatus, remark, `${user.firstName} ${user.lastName}`, "teacherRemark", user.schoolId);
+      
+      toast.success(`Leave ${actionType === 'APPROVED' ? 'forwarded to Manager' : 'rejected'} successfully`);
+      setIsActionModalOpen(false);
+      await loadData();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to update leave status");
+    }
   };
 
   return (

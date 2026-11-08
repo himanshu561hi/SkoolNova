@@ -16,7 +16,7 @@ export default function LeaveRouterPage() {
     return <TeacherLeavePage />;
   }
   
-  if (user.role === "MANAGER" || user.role === "SUPER_ADMIN") {
+  if (user.role === "MANAGER" || user.role === "SCHOOL_MANAGER" || user.role === "SUPER_ADMIN") {
     return <ManagerLeavePage />;
   }
 

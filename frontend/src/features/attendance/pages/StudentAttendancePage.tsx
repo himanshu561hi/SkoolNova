@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/features/auth/store/authStore";
-import { getAttendanceRecords, getStudentAverageAttendance } from "../services/attendance.service";
+import { fetchAttendanceRecordsAsync, getStudentAverageAttendance } from "../services/attendance.service";
 import type { AttendanceRecord } from "../types/attendance.types";
 import { ClipboardCheck, TrendingUp, Calendar, Clock, BookOpen, ExternalLink, Users, FileText, ChevronDown } from "lucide-react";
 import { getStudents } from "@/features/student/services/student.service";
 import { getTeachers } from "@/features/teacher/services/teacher.service";
-import { getAssignments } from "@/features/assignments/services/assignment.service";
+import { getAssignmentsAsync } from "@/features/assignments/services/assignment.service";
 import { getTeachingPeriods } from "@/features/timetable/utils/periods.utils";
+import { getTimetableSlots } from "@/features/timetable/services/timetable.service";
 import Modal from "@/components/ui/Modal";
 
 type TimetableEntry = { id: string; className: string; day: string; periodIndex: number; teacherId: string; subject: string };
@@ -33,8 +34,9 @@ export default function StudentAttendancePage() {
     if (!user) return;
 
     const loadData = async () => {
-      // 1. Attendance Records
-      const all = getAttendanceRecords(user.schoolId).filter(r => r.studentId === user.id);
+      // 1. Attendance Records from DB
+      const attendanceList = await fetchAttendanceRecordsAsync({ schoolId: user.schoolId });
+      const all = attendanceList.filter(r => r.studentId === user.id);
       setRecords(all.sort((a, b) => b.date.localeCompare(a.date)));
       setAvgPct(getStudentAverageAttendance(user.id, user.schoolId));
 
@@ -44,30 +46,26 @@ export default function StudentAttendancePage() {
       const myClass = me?.className || "";
       setStudentClassName(myClass);
 
-      // 3. Timetable & Teachers
+      // 3. Timetable & Teachers from DB
       if (myClass) {
         const teachers = await getTeachers(user.schoolId);
         const teacherMap = Object.fromEntries(teachers.map(t => [t.id, t.fullName]));
         const periods = getTeachingPeriods(user.schoolId);
 
-        const timetableKey = user.schoolId ? `mock_timetable_${user.schoolId}` : "mock_timetable";
-        const savedTT = localStorage.getItem(timetableKey);
-        if (savedTT) {
-          const entries: TimetableEntry[] = JSON.parse(savedTT);
-          const todays = entries.filter(e => e.className === myClass && e.day === todayDay);
+        const slots = await getTimetableSlots(user.schoolId, myClass);
+        const todays = slots.filter(e => e.className === myClass && e.day === todayDay);
 
-          const scheduleWithDetails = todays.map(e => ({
-            ...e,
-            time: periods.find(p => p.index === e.periodIndex)?.time || "Unknown",
-            teacherName: teacherMap[e.teacherId] || "Unknown Teacher"
-          })).sort((a, b) => a.periodIndex - b.periodIndex);
+        const scheduleWithDetails = todays.map(e => ({
+          ...e,
+          time: periods.find(p => p.index === e.periodIndex)?.time || "Unknown",
+          teacherName: teacherMap[e.teacherId] || e.teacherName || "Unknown Teacher"
+        })).sort((a, b) => a.periodIndex - b.periodIndex);
 
-          setTodaySchedule(scheduleWithDetails);
-        }
+        setTodaySchedule(scheduleWithDetails);
       }
 
-      // 4. Assignments
-      const allAssignments = getAssignments(user.schoolId);
+      // 4. Assignments from DB
+      const allAssignments = await getAssignmentsAsync(user.schoolId);
       const now = new Date();
       setActiveAssignments(allAssignments.filter(a => new Date(a.dueDate) >= now));
     };

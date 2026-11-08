@@ -122,26 +122,6 @@ export default function ProfilePage() {
         await updateStudent(updated);
         updateUser({ firstName, lastName, email });
 
-        // Update mock_users in localStorage to persist across logins
-        const localUsers = JSON.parse(
-          localStorage.getItem("mock_users") || "[]",
-        );
-        const userIdx = localUsers.findIndex((u: any) => u.id === user.id);
-        const updatedUserMock = {
-          id: user.id,
-          firstName,
-          lastName,
-          email,
-          role: "STUDENT" as const,
-          mustChangePassword: false,
-        };
-        if (userIdx >= 0) {
-          localUsers[userIdx] = { ...localUsers[userIdx], ...updatedUserMock };
-        } else {
-          localUsers.push(updatedUserMock);
-        }
-        localStorage.setItem("mock_users", JSON.stringify(localUsers));
-
         // Notify Teacher
         addNotification({
           title: "Student Profile Updated",
@@ -171,27 +151,6 @@ export default function ProfilePage() {
         const lName = nameParts.slice(1).join(" ") || "";
         updateUser({ firstName: fName, lastName: lName, email });
 
-        // Update mock_users in localStorage to persist across logins
-        const localUsers = JSON.parse(
-          localStorage.getItem("mock_users") || "[]",
-        );
-        const userIdx = localUsers.findIndex((u: any) => u.id === user.id);
-        const updatedUserMock = {
-          id: user.id,
-          firstName: fName,
-          lastName: lName,
-          email,
-          role: "TEACHER" as const,
-          mustChangePassword: false,
-        };
-        if (userIdx >= 0) {
-          localUsers[userIdx] = { ...localUsers[userIdx], ...updatedUserMock };
-        } else {
-          localUsers.push(updatedUserMock);
-        }
-        localStorage.setItem("mock_users", JSON.stringify(localUsers));
-
-        // Notify Manager
         // Notify Manager
         addNotification({
           title: "Teacher Profile Updated",

@@ -54,7 +54,12 @@ function DashboardPage() {
     return <SuperAdminDashboard />;
   }
 
-  if (role === "MANAGER") {
+  if (
+    role === "MANAGER" ||
+    role === "SCHOOL_MANAGER" ||
+    role === "PRINCIPAL" ||
+    role === "DIRECTOR"
+  ) {
     return (
       <ManagerDashboard
         stats={stats || []}

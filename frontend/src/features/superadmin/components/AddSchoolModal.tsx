@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { X, Building2, User, Mail, Lock, Copy, CheckCircle2 } from "lucide-react";
+import { createSchool } from "../services/school.service";
+import { toast } from "sonner";
 
 type Props = {
   isOpen: boolean;
@@ -9,6 +11,7 @@ type Props = {
 
 export default function AddSchoolModal({ isOpen, onClose, onSuccess }: Props) {
   const [step, setStep] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     schoolName: "",
     managerFirstName: "",
@@ -20,41 +23,17 @@ export default function AddSchoolModal({ isOpen, onClose, onSuccess }: Props) {
 
   if (!isOpen) return null;
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // 1. Generate unique IDs
-    const schoolId = `school-${Date.now()}`;
-    const managerId = `mgr-${Date.now()}`;
-
-    // 2. Save School to mock_schools
-    const localSchools = JSON.parse(localStorage.getItem("mock_schools") || "[]");
-    localSchools.push({
-      id: schoolId,
-      name: formData.schoolName,
-      managerEmail: formData.managerEmail,
-      status: "ACTIVE",
-      createdAt: new Date().toISOString(),
-    });
-    localStorage.setItem("mock_schools", JSON.stringify(localSchools));
-
-    // 3. Save Manager to mock_users
-    const localUsers = JSON.parse(localStorage.getItem("mock_users") || "[]");
-    localUsers.push({
-      id: managerId,
-      firstName: formData.managerFirstName,
-      lastName: formData.managerLastName,
-      email: formData.managerEmail,
-      password: formData.managerPassword,
-      role: "MANAGER",
-      mustChangePassword: true,
-      schoolId: schoolId,
-      schoolName: formData.schoolName,
-    });
-    localStorage.setItem("mock_users", JSON.stringify(localUsers));
-
-    // Move to success step to show credentials
-    setStep(2);
+    setIsLoading(true);
+    try {
+      await createSchool(formData);
+      setStep(2);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to create school");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const copyCredentials = () => {
@@ -122,10 +101,10 @@ export default function AddSchoolModal({ isOpen, onClose, onSuccess }: Props) {
                 </div>
               </div>
 
-              {/* Manager Info */}
+              {/* Manager / Principal Info */}
               <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">2. Manager Account</h3>
-                <p className="text-xs text-slate-500">This account will have full access to manage the school.</p>
+                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">2. Principal / Director Account</h3>
+                <p className="text-xs text-slate-500">This account will be the institution's Principal/Director with full administrative campus control.</p>
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -136,7 +115,7 @@ export default function AddSchoolModal({ isOpen, onClose, onSuccess }: Props) {
                         required
                         type="text"
                         className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition text-slate-800 dark:text-slate-200"
-                        placeholder="John"
+                        placeholder="e.g. Aman"
                         value={formData.managerFirstName}
                         onChange={e => setFormData({ ...formData, managerFirstName: e.target.value })}
                       />
@@ -148,7 +127,7 @@ export default function AddSchoolModal({ isOpen, onClose, onSuccess }: Props) {
                       required
                       type="text"
                       className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition text-slate-800 dark:text-slate-200"
-                      placeholder="Doe"
+                      placeholder="e.g. Gupta"
                       value={formData.managerLastName}
                       onChange={e => setFormData({ ...formData, managerLastName: e.target.value })}
                     />
@@ -163,7 +142,7 @@ export default function AddSchoolModal({ isOpen, onClose, onSuccess }: Props) {
                       required
                       type="email"
                       className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition text-slate-800 dark:text-slate-200"
-                      placeholder="manager@school.com"
+                      placeholder="principal@school.edu"
                       value={formData.managerEmail}
                       onChange={e => setFormData({ ...formData, managerEmail: e.target.value })}
                     />

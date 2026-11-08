@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { ClipboardList, CheckCircle2, Clock, ChevronRight } from "lucide-react";
-import { getAssignments, getSubmissions } from "../../assignments/services/assignment.service";
-import { getAttendanceRecords } from "@/features/attendance/services/attendance.service";
+import { getAssignmentsAsync, getSubmissionsAsync } from "../../assignments/services/assignment.service";
+import { fetchAttendanceRecordsAsync } from "@/features/attendance/services/attendance.service";
+import { getTimetableSlots } from "@/features/timetable/services/timetable.service";
 import { useAuthStore } from "@/features/auth/store/authStore";
 import { useNavigate } from "react-router-dom";
 
@@ -22,62 +23,68 @@ export default function TeacherPendingTasks() {
   useEffect(() => {
     if (!user) return;
 
-    const newTasks: Task[] = [];
-    
-    // 1. Check for ungraded assignments (Submitted by students)
-    const allAssignments = getAssignments(user.schoolId).filter(a => a.teacherId === user.id);
-    const allSubmissions = getSubmissions();
-    
-    let pendingReviews = 0;
-    
-    allAssignments.forEach(assignment => {
-      const subs = allSubmissions.filter(s => s.assignmentId === assignment.id && s.status === "SUBMITTED");
-      if (subs.length > 0) {
-        pendingReviews += subs.length;
-        newTasks.push({
-          id: `assn_${assignment.id}`,
-          title: `Review: ${assignment.title}`,
-          subtitle: `${subs.length} new submissions for Class ${assignment.className}`,
-          type: "NEEDS REVIEW",
-          iconType: "ASSIGNMENT",
-          path: "/assignments"
+    const loadTasks = async () => {
+      const newTasks: Task[] = [];
+      
+      try {
+        const [allAssignments, allSubmissions, slots, records] = await Promise.all([
+          getAssignmentsAsync(user.schoolId),
+          getSubmissionsAsync(),
+          getTimetableSlots(user.schoolId, undefined, user.id),
+          fetchAttendanceRecordsAsync({
+            date: new Date().toISOString().split("T")[0],
+            schoolId: user.schoolId,
+          }),
+        ]);
+
+        // 1. Check for ungraded assignments (Submitted by students)
+        const myAssignments = allAssignments.filter(a => a.teacherId === user.id);
+        myAssignments.forEach(assignment => {
+          const subs = allSubmissions.filter(s => s.assignmentId === assignment.id && s.status === "SUBMITTED");
+          if (subs.length > 0) {
+            newTasks.push({
+              id: `assn_${assignment.id}`,
+              title: `Review: ${assignment.title}`,
+              subtitle: `${subs.length} new submissions for Class ${assignment.className}`,
+              type: "NEEDS REVIEW",
+              iconType: "ASSIGNMENT",
+              path: "/assignments"
+            });
+          }
         });
-      }
-    });
 
-    // 2. Check for unmarked attendance today
-    const ttKey = user.schoolId ? `mock_timetable_${user.schoolId}` : "mock_timetable";
-    const savedTimetable = localStorage.getItem(ttKey);
-    if (savedTimetable) {
-      const entries = JSON.parse(savedTimetable);
-      const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-      const currentDay = days[new Date().getDay()];
-      
-      const myClassesToday = entries.filter((e: any) => e.teacherId === user.id && e.day === currentDay);
-      
-      if (myClassesToday.length > 0) {
-        const todayStr = new Date().toISOString().split("T")[0];
-        const markedToday = getAttendanceRecords(user?.schoolId).filter(r => r.teacherId === user.id && r.date === todayStr);
-        
-        // Count how many unique periods we have marked today
-        const markedPeriods = new Set(markedToday.map(r => r.periodIndex)).size;
-        const totalPeriods = myClassesToday.length;
-        
-        if (markedPeriods < totalPeriods) {
-          const remaining = totalPeriods - markedPeriods;
-          newTasks.push({
-            id: "attendance_pending",
-            title: "Mark Today's Attendance",
-            subtitle: `You have ${remaining} class${remaining > 1 ? 'es' : ''} left to mark today`,
-            type: "URGENT",
-            iconType: "ATTENDANCE",
-            path: "/attendance"
-          });
+        // 2. Check for unmarked attendance today
+        const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+        const currentDay = days[new Date().getDay()];
+        const myClassesToday = slots.filter(e => e.day === currentDay);
+
+        if (myClassesToday.length > 0) {
+          const todayStr = new Date().toISOString().split("T")[0];
+          const markedToday = records.filter(r => (r.teacherId === user.id || (r as any).markedByTeacherId === user.id) && r.date === todayStr);
+          
+          const markedPeriods = new Set(markedToday.map(r => r.periodIndex)).size;
+          const totalPeriods = myClassesToday.length;
+
+          if (markedPeriods < totalPeriods) {
+            const remaining = totalPeriods - markedPeriods;
+            newTasks.push({
+              id: "attendance_pending",
+              title: "Mark Today's Attendance",
+              subtitle: `You have ${remaining} class${remaining > 1 ? 'es' : ''} left to mark today`,
+              type: "URGENT",
+              iconType: "ATTENDANCE",
+              path: "/attendance"
+            });
+          }
         }
+      } catch (err) {
+        console.error("Failed to load teacher pending tasks:", err);
       }
-    }
 
-    setTasks(newTasks.slice(0, 4)); // max 4 tasks
+      setTasks(newTasks.slice(0, 4)); // max 4 tasks
+    };
+
+    loadTasks();
   }, [user]);
 
   return (

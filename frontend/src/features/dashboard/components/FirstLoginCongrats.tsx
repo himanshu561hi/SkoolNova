@@ -60,7 +60,7 @@ const CONFETTI_COLORS = [
   "#EF476F",
 ];
 
-const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
+const ROLE_CONFIGS: Partial<Record<UserRole, RoleConfig>> = {
   SUPER_ADMIN: {
     roleBadge: "Super Admin Role Activated",
     subtitle: "Welcome to the control center of your school ecosystem.",
@@ -83,7 +83,29 @@ const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     trophyShadow: "shadow-violet-500/30",
   },
   MANAGER: {
-    roleBadge: "Manager Role Activated",
+    roleBadge: "Principal / Director Role Activated",
+    subtitle:
+      "Welcome aboard! You now have full administrative control over your school.",
+    features: [
+      { icon: "🏫", label: "Manage School" },
+      { icon: "👨‍🏫", label: "Manage Teachers" },
+      { icon: "📊", label: "View Reports" },
+      { icon: "📅", label: "Schedule Exams" },
+    ],
+    trophyIcon: (
+      <svg
+        className="w-10 h-10 text-white drop-shadow-md"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+      >
+        <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z" />
+      </svg>
+    ),
+    trophyGradient: "from-emerald-400 via-teal-500 to-cyan-600",
+    trophyShadow: "shadow-emerald-500/30",
+  },
+  SCHOOL_MANAGER: {
+    roleBadge: "Principal / Director Role Activated",
     subtitle:
       "Welcome aboard! You now have full administrative control over your school.",
     features: [
@@ -264,7 +286,7 @@ export default function FirstLoginCongrats({ role }: FirstLoginCongratsProps) {
   const animFrameRef = useRef<number>(0);
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  const config = ROLE_CONFIGS[role];
+  const config = ROLE_CONFIGS[role] || ROLE_CONFIGS.MANAGER!;
 
   // ── Launch confetti ──
   const launchConfetti = useCallback(() => {

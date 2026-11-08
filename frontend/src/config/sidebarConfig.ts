@@ -17,6 +17,7 @@ import {
   CalendarDays,
   User,
   CalendarHeart,
+  MessageSquare,
 } from "lucide-react";
 
 type SidebarItem = {
@@ -26,20 +27,23 @@ type SidebarItem = {
   permission?: string;
 };
 
+const managerSidebarItems: SidebarItem[] = [
+  { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
+  { label: "Students", path: "/students", icon: Users, permission: "students.create" },
+  { label: "Teachers", path: "/teachers", icon: GraduationCap, permission: "teachers.create" },
+  { label: "Timetable", path: "/timetable", icon: CalendarDays },
+  { label: "Leave", path: "/leave", icon: CalendarHeart },
+  { label: "Exams", path: "/exams", icon: PenSquare },
+  { label: "Reports", path: "/reports", icon: FileText },
+  { label: "Fees", path: "/fees", icon: IndianRupee },
+];
+
 export const SIDEBAR_CONFIG: Record<UserRole, SidebarItem[]> = {
   /* ========================= */
-  /* MANAGER */
+  /* MANAGER / PRINCIPAL / DIRECTOR */
   /* ========================= */
-  MANAGER: [
-    { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
-    { label: "Students", path: "/students", icon: Users, permission: "students.create" },
-    { label: "Teachers", path: "/teachers", icon: GraduationCap, permission: "teachers.create" },
-    { label: "Timetable", path: "/timetable", icon: CalendarDays },
-    { label: "Leave", path: "/leave", icon: CalendarHeart },
-    { label: "Exams", path: "/exams", icon: PenSquare },
-    { label: "Reports", path: "/reports", icon: FileText },
-    { label: "Fees", path: "/fees", icon: IndianRupee },
-  ],
+  MANAGER: managerSidebarItems,
+  SCHOOL_MANAGER: managerSidebarItems,
   /* ========================= */
   /* TEACHER */
   /* ========================= */
@@ -79,6 +83,7 @@ export const SIDEBAR_CONFIG: Record<UserRole, SidebarItem[]> = {
   SUPER_ADMIN: [
     { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
     { label: "Schools", path: "/schools", icon: Building2 },
+    { label: "Inquiries", path: "/inquiries", icon: MessageSquare },
     { label: "Analytics", path: "/analytics", icon: BarChart3 },
   ],
 };

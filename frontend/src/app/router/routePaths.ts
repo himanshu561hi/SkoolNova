@@ -2,6 +2,7 @@ export const ROUTE_PATHS = {
   HOME: "/",
 
   LOGIN: "/login",
+  FORGOT_PASSWORD: "/forgot-password",
   CHANGE_PASSWORD: "/change-password",
 
   DASHBOARD: "/dashboard",
@@ -19,5 +20,6 @@ export const ROUTE_PATHS = {
   ATTENDANCE: "/attendance",
   PROFILE: "/profile",
   SCHOOLS: "/schools",
+  INQUIRIES: "/inquiries",
   UNAUTHORIZED: "/unauthorized",
 } as const;

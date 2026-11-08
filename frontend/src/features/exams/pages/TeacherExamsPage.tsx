@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import PageHeader from "@/components/shared/PageHeader";
-import { getExams, updateExamPaperStatus, updateMarksStatus } from "../services/exam.service";
+import { getExams, updateExamPaperStatus, updateMarksStatus, saveExamMarks } from "../services/exam.service";
 import { getTeachers } from "../../teacher/services/teacher.service";
 import { Teacher } from "../../teacher/types/teacher.types";
 import { getStudents } from "@/features/student/services/student.service";
@@ -21,10 +21,7 @@ export default function TeacherExamsPage() {
   const [loading, setLoading] = useState(true);
   
   // examId_subjectId_studentId -> marks
-  const [marksData, setMarksData] = useState<Record<string, string>>(() => {
-    const saved = localStorage.getItem("mock_marks_data");
-    return saved ? JSON.parse(saved) : {};
-  });
+  const [marksData, setMarksData] = useState<Record<string, string>>({});
   const [expandedExamId, setExpandedExamId] = useState<string | null>(null);
   
   // State for mock upload
@@ -83,15 +80,30 @@ export default function TeacherExamsPage() {
   };
 
   const handleSaveMarks = async (examId: string, subjects: ExamSubject[]) => {
-    // Save to local storage for persistence
-    localStorage.setItem("mock_marks_data", JSON.stringify(marksData));
-    
-    // In a real app, save marksData to backend here.
-    for (const subject of subjects) {
-      await updateMarksStatus(examId, subject.id, true, user?.schoolId);
+    try {
+      for (const subject of subjects) {
+        const records = Object.entries(marksData)
+          .filter(([key]) => key.startsWith(`${examId}_${subject.id}_`))
+          .map(([key, val]) => {
+            const parts = key.split("_");
+            const studentId = parts.slice(2).join("_");
+            return {
+              studentId,
+              marksObtained: Number(val) || 0,
+              maxMarks: 100,
+            };
+          });
+        if (records.length > 0) {
+          await saveExamMarks(examId, subject.id, records, user?.schoolId);
+        } else {
+          await updateMarksStatus(examId, subject.id, true, user?.schoolId);
+        }
+      }
+      toast.success("Marks saved successfully to database!");
+      loadExams();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to save marks to database.");
     }
-    toast.success("Marks saved successfully!");
-    loadExams();
   };
 
   const handleRemind = (teacherName: string | undefined, subjectName: string) => {

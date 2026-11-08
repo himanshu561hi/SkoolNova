@@ -6,7 +6,7 @@ import StudentExamsPage from "./StudentExamsPage";
 export default function ExamsRouterPage() {
   const { user } = useAuthStore();
   
-  if (user?.role === "MANAGER") {
+  if (user?.role === "MANAGER" || user?.role === "SCHOOL_MANAGER") {
     return <ManagerExamsPage />;
   }
   

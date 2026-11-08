@@ -21,6 +21,22 @@ export const PERMISSIONS = {
     "leave.manage",
   ],
 
+  SCHOOL_MANAGER: [
+    "students.create",
+    "students.update",
+    "students.delete",
+    "teachers.create",
+    "teachers.update",
+    "teachers.delete",
+    "fees.view",
+    "fees.manage",
+    "attendance.manage",
+    "salary.manage",
+    "reports.view",
+    "timetable.manage",
+    "leave.manage",
+  ],
+
   TEACHER: [
     "students.create",
     "attendance.mark",
@@ -57,6 +73,8 @@ export const ROLE_PERMISSIONS = {
     PERMISSIONS.SUPER_ADMIN,
 
   [ROLES.MANAGER]: PERMISSIONS.MANAGER,
+
+  [ROLES.SCHOOL_MANAGER]: PERMISSIONS.SCHOOL_MANAGER,
 
   [ROLES.TEACHER]: PERMISSIONS.TEACHER,
 

@@ -4,8 +4,9 @@ import { getAssignments, getSubmissions, saveSubmission } from "../services/assi
 import type { Assignment, AssignmentSubmission } from "../types/assignment.types";
 import { getStudents } from "@/features/student/services/student.service";
 import { toast } from "sonner";
-import { BookOpen, CheckCircle, Clock, UploadCloud, AlertCircle, Paperclip, Download, History } from "lucide-react";
+import { BookOpen, CheckCircle, Clock, UploadCloud, AlertCircle, Paperclip, Download, History, Loader2 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
+import { uploadFile } from "@/services/upload.service";
 
 const isOverdue = (dueDate: string) => new Date(dueDate) < new Date();
 // expired = overdue + 5 days
@@ -50,17 +51,31 @@ export default function StudentAssignmentsPage() {
     setMySubmissions(getSubmissions().filter(s => s.studentId === user.id));
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.type !== "application/pdf") { toast.error("Only PDF files allowed."); return; }
-    if (file.size > 5 * 1024 * 1024) { toast.error("Max 5MB allowed."); return; }
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setAttachmentName(file.name);
-      setAttachmentData(ev.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+    if (file.size > 10 * 1024 * 1024) { toast.error("Max 10MB allowed."); return; }
+
+    setIsUploading(true);
+    try {
+      const res = await uploadFile(file);
+      setAttachmentName(res.originalFilename || file.name);
+      setAttachmentData(res.fileUrl);
+      toast.success("File uploaded to cloud storage!");
+    } catch {
+      // Fallback to local data URL if server unreachable
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setAttachmentName(file.name);
+        setAttachmentData(ev.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const openSubmitModal = (assignment: Assignment, sub: AssignmentSubmission) => {

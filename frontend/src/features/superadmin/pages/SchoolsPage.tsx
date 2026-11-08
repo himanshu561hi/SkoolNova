@@ -3,15 +3,14 @@ import { Building2, Plus, Users, School, Search, Trash2 } from "lucide-react";
 import AddSchoolModal from "../components/AddSchoolModal";
 import DeleteSchoolModal from "../components/DeleteSchoolModal";
 import DashboardHeader from "@/features/dashboard/components/DashboardHeader";
+import {
+  getSchools,
+  updateSchoolStatus,
+  requestDeleteSchoolOtp,
+  deleteSchool,
+  type SchoolEntry,
+} from "../services/school.service";
 import { toast } from "sonner";
-
-type SchoolEntry = {
-  id: string;
-  name: string;
-  managerEmail: string;
-  createdAt: string;
-  status?: "ACTIVE" | "INACTIVE";
-};
 
 export default function SchoolsPage() {
   const [schools, setSchools] = useState<SchoolEntry[]>([]);
@@ -23,9 +22,13 @@ export default function SchoolsPage() {
     loadSchools();
   }, []);
 
-  const loadSchools = () => {
-    const localSchools = JSON.parse(localStorage.getItem("mock_schools") || "[]");
-    setSchools(localSchools);
+  const loadSchools = async () => {
+    try {
+      const data = await getSchools(searchQuery);
+      setSchools(data);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to load schools");
+    }
   };
 
   const handleSchoolAdded = () => {
@@ -34,40 +37,38 @@ export default function SchoolsPage() {
     toast.success("School and Manager created successfully!");
   };
 
-  const toggleStatus = (schoolId: string, currentStatus: string) => {
-    const localSchools = JSON.parse(localStorage.getItem("mock_schools") || "[]");
-    const updated = localSchools.map((s: any) => {
-      if (s.id === schoolId) {
-        return { ...s, status: currentStatus === "ACTIVE" ? "INACTIVE" : "ACTIVE" };
-      }
-      return s;
-    });
-    localStorage.setItem("mock_schools", JSON.stringify(updated));
-    loadSchools();
-    toast.success("School status updated!");
+  const toggleStatus = async (schoolId: string, currentStatus: string) => {
+    try {
+      const newStatus = currentStatus === "ACTIVE" ? "INACTIVE" : "ACTIVE";
+      await updateSchoolStatus(schoolId, newStatus);
+      await loadSchools();
+      toast.success("School status updated!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update school status");
+    }
   };
 
-  const handleDeleteClick = (school: SchoolEntry) => {
+  const handleDeleteClick = async (school: SchoolEntry) => {
     setSchoolToDelete(school);
-    toast.success("OTP sent to superadmin@digischool.com (Mock OTP: 123456)", { duration: 5000 });
+    try {
+      await requestDeleteSchoolOtp(school.id);
+      toast.success("OTP sent to superadmin email (Mock OTP: 123456)", { duration: 5000 });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to request deletion OTP");
+    }
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async (otp: string) => {
     if (!schoolToDelete) return;
 
-    // 1. Remove School
-    const localSchools = JSON.parse(localStorage.getItem("mock_schools") || "[]");
-    const updatedSchools = localSchools.filter((s: any) => s.id !== schoolToDelete.id);
-    localStorage.setItem("mock_schools", JSON.stringify(updatedSchools));
-
-    // 2. Remove associated Manager
-    const localUsers = JSON.parse(localStorage.getItem("mock_users") || "[]");
-    const updatedUsers = localUsers.filter((u: any) => u.schoolId !== schoolToDelete.id);
-    localStorage.setItem("mock_users", JSON.stringify(updatedUsers));
-
-    loadSchools();
-    setSchoolToDelete(null);
-    toast.success("School and its manager account deleted successfully!");
+    try {
+      await deleteSchool(schoolToDelete.id, otp);
+      await loadSchools();
+      setSchoolToDelete(null);
+      toast.success("School and its manager account deleted successfully!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete school");
+    }
   };
 
   return (
