@@ -6,9 +6,16 @@ import { v2 as cloudinary } from 'cloudinary';
 import ImageKit from 'imagekit';
 import { env } from '../../config/env.js';
 
-// In serverless environments like Vercel, root /var/task is read-only, so use /tmp for temporary file storage
-const uploadDir = process.env.VERCEL
-  ? path.join('/tmp', 'uploads')
+// In serverless environments (Vercel/AWS Lambda), the root filesystem is read-only.
+// We use /tmp/uploads only if local upload is invoked.
+const isServerless = Boolean(
+  process.env.VERCEL ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  (typeof process.cwd === "function" && process.cwd().startsWith("/var/task"))
+);
+
+const uploadDir = isServerless
+  ? path.join("/tmp", "uploads")
   : path.resolve(process.cwd(), env.UPLOAD_DIR);
 
 function ensureUploadDir() {
@@ -20,9 +27,6 @@ function ensureUploadDir() {
     console.warn("Storage warning: Could not initialize local upload directory:", err);
   }
 }
-
-// Safe initial creation attempt
-ensureUploadDir();
 
 // Initialize Cloudinary if credentials are provided
 const hasCloudinary = Boolean(

@@ -14,7 +14,10 @@ import { seedInitialAdmin } from "./core/utils/seed.js";
 
 export function buildApp(): FastifyInstance {
   const app = Fastify({
-    logger: env.NODE_ENV === "development" ? { transport: { target: "pino-pretty" } } : true,
+    logger:
+      !process.env.VERCEL && env.NODE_ENV === "development"
+        ? { transport: { target: "pino-pretty" } }
+        : true,
   });
 
   // Database Connection Plugin
