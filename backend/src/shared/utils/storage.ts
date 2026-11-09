@@ -6,11 +6,23 @@ import { v2 as cloudinary } from 'cloudinary';
 import ImageKit from 'imagekit';
 import { env } from '../../config/env.js';
 
-const uploadDir = path.resolve(process.cwd(), env.UPLOAD_DIR);
+// In serverless environments like Vercel, root /var/task is read-only, so use /tmp for temporary file storage
+const uploadDir = process.env.VERCEL
+  ? path.join('/tmp', 'uploads')
+  : path.resolve(process.cwd(), env.UPLOAD_DIR);
 
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+function ensureUploadDir() {
+  try {
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+  } catch (err) {
+    console.warn("Storage warning: Could not initialize local upload directory:", err);
+  }
 }
+
+// Safe initial creation attempt
+ensureUploadDir();
 
 // Initialize Cloudinary if credentials are provided
 const hasCloudinary = Boolean(
@@ -123,6 +135,7 @@ async function uploadToImageKit(fileStream: NodeJS.ReadableStream, originalFilen
  * Fallback: Upload file to local disk
  */
 async function uploadToLocal(fileStream: NodeJS.ReadableStream, originalFilename: string) {
+  ensureUploadDir();
   const ext = path.extname(originalFilename);
   const safeBase = path.basename(originalFilename, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
   const uniqueName = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}-${safeBase}${ext}`;
