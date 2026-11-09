@@ -35,4 +35,14 @@ if (!process.env.VERCEL) {
   }
 }
 
-export default app;
+export default async function handler(req: any, res: any) {
+  await app.ready();
+  return new Promise((resolve, reject) => {
+    res.on("finish", resolve);
+    res.on("close", resolve);
+    res.on("error", reject);
+    app.server.emit("request", req, res);
+  });
+}
+
+export { app };
