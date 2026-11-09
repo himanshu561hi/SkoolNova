@@ -28,12 +28,12 @@ export const connectMongo = async (): Promise<typeof mongoose> => {
 };
 
 const mongoosePlugin: FastifyPluginAsync = async (fastify) => {
-  try {
-    await connectMongo();
-    fastify.log.info("Connected to MongoDB Atlas database successfully");
-  } catch (error) {
-    fastify.log.warn("Initial MongoDB connection attempt deferred; will connect on first request");
-  }
+  // Non-blocking connection attempt for instant serverless startup
+  void connectMongo()
+    .then(() => fastify.log.info("Connected to MongoDB Atlas database successfully"))
+    .catch((error) =>
+      fastify.log.warn("Initial MongoDB connection deferred: " + (error?.message || error))
+    );
 
   // Ensure DB connection before processing business data routes
   fastify.addHook("onRequest", async (request) => {
