@@ -1,112 +1,144 @@
-import { FastifyPluginAsync } from 'fastify';
+import { Router, Request, Response, NextFunction } from 'express';
 import { AcademicsService } from './academics.service.js';
 import {
   createClassSchema,
   setClassSubjectsSchema,
   configurePeriodsSchema,
 } from './academics.schema.js';
+import { authenticate, requireRoles } from '../../core/middleware/auth.js';
 import { AppError } from '../../core/errors/app-error.js';
 import { HTTP_STATUS } from '../../config/constants.js';
 
-export const academicsRoutes: FastifyPluginAsync = async (fastify) => {
-  // Helper to extract tenantId
-  const getTenantId = (request: any, bodyOrQuery?: any): string => {
-    const tenantId = request.user.role === 'SUPER_ADMIN'
-      ? (bodyOrQuery?.schoolId || request.user.tenantId)
-      : request.user.tenantId;
+export const academicsRoutes = Router();
 
-    if (!tenantId) {
-      throw new AppError('Tenant ID is required', HTTP_STATUS.BAD_REQUEST, 'MISSING_TENANT');
-    }
-    return tenantId;
-  };
+// Helper to extract tenantId
+const getTenantId = (req: Request, bodyOrQuery?: any): string => {
+  const tenantId = req.user!.role === 'SUPER_ADMIN'
+    ? (bodyOrQuery?.schoolId || req.user!.tenantId)
+    : req.user!.tenantId;
 
-  // GET /api/v1/academics/classes
-  fastify.get('/classes', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const tenantId = getTenantId(request, request.query);
+  if (!tenantId) {
+    throw new AppError('Tenant ID is required', HTTP_STATUS.BAD_REQUEST, 'MISSING_TENANT');
+  }
+  return tenantId;
+};
+
+// GET /api/v1/academics/classes
+academicsRoutes.get('/classes', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = getTenantId(req, req.query);
     const classes = await AcademicsService.listClasses(tenantId);
-    return reply.status(200).send({
+    res.status(200).json({
       success: true,
       data: classes,
     });
-  });
+  } catch (err) {
+    next(err);
+  }
+});
 
-  // POST /api/v1/academics/classes
-  fastify.post(
-    '/classes',
-    { preHandler: [fastify.authenticate, fastify.requireRoles('MANAGER', 'SUPER_ADMIN')] },
-    async (request, reply) => {
-      const input = createClassSchema.parse(request.body);
-      const tenantId = getTenantId(request, input);
+// POST /api/v1/academics/classes
+academicsRoutes.post(
+  '/classes',
+  authenticate,
+  requireRoles('MANAGER', 'SUPER_ADMIN'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const input = createClassSchema.parse(req.body);
+      const tenantId = getTenantId(req, input);
       const created = await AcademicsService.createClass(tenantId, input.name, input.academicYear);
-      return reply.status(201).send({
+      res.status(201).json({
         success: true,
         data: created,
       });
+    } catch (err) {
+      next(err);
     }
-  );
+  }
+);
 
-  // DELETE /api/v1/academics/classes/:id
-  fastify.delete(
-    '/classes/:id',
-    { preHandler: [fastify.authenticate, fastify.requireRoles('MANAGER', 'SUPER_ADMIN')] },
-    async (request, reply) => {
-      const { id } = request.params as { id: string };
-      const tenantId = getTenantId(request, request.query);
+// DELETE /api/v1/academics/classes/:id
+academicsRoutes.delete(
+  '/classes/:id',
+  authenticate,
+  requireRoles('MANAGER', 'SUPER_ADMIN'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      const tenantId = getTenantId(req, req.query);
       const result = await AcademicsService.deleteClass(tenantId, id);
-      return reply.status(200).send(result);
+      res.status(200).json(result);
+    } catch (err) {
+      next(err);
     }
-  );
+  }
+);
 
-  // GET /api/v1/academics/class-subjects
-  fastify.get('/class-subjects', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const tenantId = getTenantId(request, request.query);
+// GET /api/v1/academics/class-subjects
+academicsRoutes.get('/class-subjects', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = getTenantId(req, req.query);
     const mapping = await AcademicsService.getClassSubjectsMapping(tenantId);
-    return reply.status(200).send({
+    res.status(200).json({
       success: true,
       data: mapping,
     });
-  });
+  } catch (err) {
+    next(err);
+  }
+});
 
-  // PUT /api/v1/academics/class-subjects/:className
-  fastify.put(
-    '/class-subjects/:className',
-    { preHandler: [fastify.authenticate, fastify.requireRoles('MANAGER', 'SUPER_ADMIN')] },
-    async (request, reply) => {
-      const { className } = request.params as { className: string };
-      const input = setClassSubjectsSchema.parse(request.body);
-      const tenantId = getTenantId(request, input);
+// PUT /api/v1/academics/class-subjects/:className
+academicsRoutes.put(
+  '/class-subjects/:className',
+  authenticate,
+  requireRoles('MANAGER', 'SUPER_ADMIN'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { className } = req.params;
+      const input = setClassSubjectsSchema.parse(req.body);
+      const tenantId = getTenantId(req, input);
       const mapping = await AcademicsService.setClassSubjects(tenantId, decodeURIComponent(className), input.subjects);
-      return reply.status(200).send({
+      res.status(200).json({
         success: true,
         data: mapping,
       });
+    } catch (err) {
+      next(err);
     }
-  );
+  }
+);
 
-  // GET /api/v1/academics/periods
-  fastify.get('/periods', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const tenantId = getTenantId(request, request.query);
+// GET /api/v1/academics/periods
+academicsRoutes.get('/periods', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = getTenantId(req, req.query);
     const periods = await AcademicsService.getPeriods(tenantId);
-    return reply.status(200).send({
+    res.status(200).json({
       success: true,
       data: periods,
     });
-  });
+  } catch (err) {
+    next(err);
+  }
+});
 
-  // PUT /api/v1/academics/periods
-  fastify.put(
-    '/periods',
-    { preHandler: [fastify.authenticate, fastify.requireRoles('MANAGER', 'SUPER_ADMIN')] },
-    async (request, reply) => {
-      const input = configurePeriodsSchema.parse(request.body);
-      const tenantId = getTenantId(request, input);
+// PUT /api/v1/academics/periods
+academicsRoutes.put(
+  '/periods',
+  authenticate,
+  requireRoles('MANAGER', 'SUPER_ADMIN'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const input = configurePeriodsSchema.parse(req.body);
+      const tenantId = getTenantId(req, input);
       const periods = await AcademicsService.configurePeriods(tenantId, input);
-      return reply.status(200).send({
+      res.status(200).json({
         success: true,
         data: periods,
       });
+    } catch (err) {
+      next(err);
     }
-  );
-};
-
+  }
+);

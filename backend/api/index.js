@@ -1,7 +1,7 @@
 const path = require("path");
 const fs = require("fs");
 
-function loadBuildApp() {
+function loadApp() {
   const candidatePaths = [
     path.join(__dirname, "../dist/app.js"),
     path.join(__dirname, "./dist/app.js"),
@@ -13,8 +13,11 @@ function loadBuildApp() {
     try {
       if (fs.existsSync(candidate)) {
         const mod = require(candidate);
-        if (mod && mod.buildApp) {
-          return mod.buildApp;
+        if (mod && mod.createApp) {
+          return mod.createApp();
+        }
+        if (mod && (mod.app || mod.default)) {
+          return mod.app || mod.default;
         }
       }
     } catch (e) {
@@ -22,10 +25,9 @@ function loadBuildApp() {
     }
   }
 
-  // Direct require fallback
   try {
     const mod = require("../dist/app.js");
-    return mod.buildApp;
+    return mod.createApp ? mod.createApp() : (mod.app || mod.default);
   } catch (err) {
     console.error("Direct require fallback failed:", err.message);
   }
@@ -33,28 +35,23 @@ function loadBuildApp() {
   return null;
 }
 
-let buildApp = loadBuildApp();
 let app;
 
-async function getApp() {
+function getApp() {
   if (!app) {
-    if (!buildApp) {
-      buildApp = loadBuildApp();
-    }
-    if (!buildApp) {
+    app = loadApp();
+    if (!app) {
       throw new Error(
-        "Could not load buildApp from dist/app.js. Ensure 'npm run build' (tsc) executed successfully."
+        "Could not load Express application from dist/app.js. Ensure 'npm run build' (tsc) executed successfully."
       );
     }
-    app = buildApp();
-    await app.ready();
   }
   return app;
 }
 
-module.exports = async (req, res) => {
+module.exports = (req, res) => {
   try {
-    const fastify = await getApp();
+    const expressApp = getApp();
 
     let url = req.url || "/";
     const matchedPath = req.headers && req.headers["x-matched-path"];
@@ -68,12 +65,7 @@ module.exports = async (req, res) => {
     }
     req.url = url;
 
-    return new Promise((resolve, reject) => {
-      res.on("finish", resolve);
-      res.on("close", resolve);
-      res.on("error", reject);
-      fastify.server.emit("request", req, res);
-    });
+    return expressApp(req, res);
   } catch (err) {
     console.error("Vercel Serverless Invocation Error:", err);
     if (!res.headersSent) {

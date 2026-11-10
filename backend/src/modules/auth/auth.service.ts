@@ -6,7 +6,7 @@ import {
   generateRefreshToken,
   hashToken,
 } from '../../shared/utils/security.js';
-import { signAccessToken } from '../../core/plugins/auth.js';
+import { signAccessToken } from '../../core/middleware/auth.js';
 import {
   LoginInput,
   UpdateProfileInput,

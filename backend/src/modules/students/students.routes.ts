@@ -1,24 +1,28 @@
-import { FastifyPluginAsync } from 'fastify';
+import { Router, Request, Response, NextFunction } from 'express';
 import { StudentsService } from './students.service.js';
 import { createStudentSchema, updateStudentSchema } from './students.schema.js';
+import { authenticate, requireRoles } from '../../core/middleware/auth.js';
 import { AppError } from '../../core/errors/app-error.js';
 import { HTTP_STATUS } from '../../config/constants.js';
 
-export const studentsRoutes: FastifyPluginAsync = async (fastify) => {
-  // GET /api/v1/students - List students
-  fastify.get(
-    '/',
-    { preHandler: [fastify.authenticate, fastify.requireRoles('MANAGER', 'TEACHER', 'SUPER_ADMIN')] },
-    async (request, reply) => {
-      const tenantId = request.user.role === 'SUPER_ADMIN'
-        ? ((request.query as any)?.schoolId || request.user.tenantId)
-        : request.user.tenantId;
+export const studentsRoutes = Router();
+
+// GET /api/v1/students - List students
+studentsRoutes.get(
+  '/',
+  authenticate,
+  requireRoles('MANAGER', 'TEACHER', 'SUPER_ADMIN'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const tenantId = req.user!.role === 'SUPER_ADMIN'
+        ? ((req.query as any)?.schoolId || req.user!.tenantId)
+        : req.user!.tenantId;
 
       if (!tenantId) {
         throw new AppError('Tenant ID is required', HTTP_STATUS.BAD_REQUEST, 'MISSING_TENANT');
       }
 
-      const query = request.query as { q?: string; className?: string; page?: string; limit?: string };
+      const query = req.query as { q?: string; className?: string; page?: string; limit?: string };
       const result = await StudentsService.listStudents(tenantId, {
         query: query?.q,
         className: query?.className,
@@ -26,7 +30,7 @@ export const studentsRoutes: FastifyPluginAsync = async (fastify) => {
         limit: query?.limit ? parseInt(query.limit) : 100,
       });
 
-      return reply.status(200).send({
+      res.status(200).json({
         success: true,
         data: result.items,
         meta: {
@@ -36,86 +40,106 @@ export const studentsRoutes: FastifyPluginAsync = async (fastify) => {
           totalPages: result.totalPages,
         },
       });
+    } catch (err) {
+      next(err);
     }
-  );
+  }
+);
 
-  // GET /api/v1/students/:id - View single student
-  fastify.get(
-    '/:id',
-    { preHandler: [fastify.authenticate] },
-    async (request, reply) => {
-      const { id } = request.params as { id: string };
-      const tenantId = request.user.role === 'SUPER_ADMIN' ? undefined : request.user.tenantId || undefined;
+// GET /api/v1/students/:id - View single student
+studentsRoutes.get(
+  '/:id',
+  authenticate,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      const tenantId = req.user!.role === 'SUPER_ADMIN' ? undefined : req.user!.tenantId || undefined;
       const student = await StudentsService.getStudent(id, tenantId);
-      return reply.status(200).send({
+      res.status(200).json({
         success: true,
         data: student,
       });
+    } catch (err) {
+      next(err);
     }
-  );
+  }
+);
 
-  // POST /api/v1/students - Create student
-  fastify.post(
-    '/',
-    { preHandler: [fastify.authenticate, fastify.requireRoles('MANAGER', 'SUPER_ADMIN')] },
-    async (request, reply) => {
-      const input = createStudentSchema.parse(request.body);
-      const tenantId = request.user.role === 'SUPER_ADMIN'
-        ? (input.schoolId || request.user.tenantId)
-        : request.user.tenantId;
+// POST /api/v1/students - Create student
+studentsRoutes.post(
+  '/',
+  authenticate,
+  requireRoles('MANAGER', 'SUPER_ADMIN'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const input = createStudentSchema.parse(req.body);
+      const tenantId = req.user!.role === 'SUPER_ADMIN'
+        ? (input.schoolId || req.user!.tenantId)
+        : req.user!.tenantId;
 
       if (!tenantId) {
         throw new AppError('Tenant ID is required', HTTP_STATUS.BAD_REQUEST, 'MISSING_TENANT');
       }
 
       const student = await StudentsService.createStudent(input, tenantId);
-      return reply.status(201).send({
+      res.status(201).json({
         success: true,
         data: student,
       });
+    } catch (err) {
+      next(err);
     }
-  );
+  }
+);
 
-  // PUT /api/v1/students/:id - Update student
-  fastify.put(
-    '/:id',
-    { preHandler: [fastify.authenticate, fastify.requireRoles('MANAGER', 'SUPER_ADMIN')] },
-    async (request, reply) => {
-      const { id } = request.params as { id: string };
-      const input = updateStudentSchema.parse(request.body);
-      const tenantId = request.user.role === 'SUPER_ADMIN'
-        ? (input.schoolId || request.user.tenantId)
-        : request.user.tenantId;
+// PUT /api/v1/students/:id - Update student
+studentsRoutes.put(
+  '/:id',
+  authenticate,
+  requireRoles('MANAGER', 'SUPER_ADMIN'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      const input = updateStudentSchema.parse(req.body);
+      const tenantId = req.user!.role === 'SUPER_ADMIN'
+        ? (input.schoolId || req.user!.tenantId)
+        : req.user!.tenantId;
 
       if (!tenantId) {
         throw new AppError('Tenant ID is required', HTTP_STATUS.BAD_REQUEST, 'MISSING_TENANT');
       }
 
       const student = await StudentsService.updateStudent(id, input, tenantId);
-      return reply.status(200).send({
+      res.status(200).json({
         success: true,
         data: student,
       });
+    } catch (err) {
+      next(err);
     }
-  );
+  }
+);
 
-  // DELETE /api/v1/students/:id - Delete student
-  fastify.delete(
-    '/:id',
-    { preHandler: [fastify.authenticate, fastify.requireRoles('MANAGER', 'SUPER_ADMIN')] },
-    async (request, reply) => {
-      const { id } = request.params as { id: string };
-      const tenantId = request.user.role === 'SUPER_ADMIN'
-        ? ((request.query as any)?.schoolId || request.user.tenantId)
-        : request.user.tenantId;
+// DELETE /api/v1/students/:id - Delete student
+studentsRoutes.delete(
+  '/:id',
+  authenticate,
+  requireRoles('MANAGER', 'SUPER_ADMIN'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      const tenantId = req.user!.role === 'SUPER_ADMIN'
+        ? ((req.query as any)?.schoolId || req.user!.tenantId)
+        : req.user!.tenantId;
 
       if (!tenantId) {
         throw new AppError('Tenant ID is required', HTTP_STATUS.BAD_REQUEST, 'MISSING_TENANT');
       }
 
       const result = await StudentsService.deleteStudent(id, tenantId);
-      return reply.status(200).send(result);
+      res.status(200).json(result);
+    } catch (err) {
+      next(err);
     }
-  );
-};
-
+  }
+);

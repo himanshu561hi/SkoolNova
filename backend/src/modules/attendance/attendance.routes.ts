@@ -1,25 +1,28 @@
-import { FastifyPluginAsync } from 'fastify';
+import { Router, Request, Response, NextFunction } from 'express';
 import { AttendanceService } from './attendance.service.js';
 import { saveStudentAttendanceSchema, saveTeacherAttendanceSchema } from './attendance.schema.js';
+import { authenticate, requireRoles } from '../../core/middleware/auth.js';
 import { AppError } from '../../core/errors/app-error.js';
 import { HTTP_STATUS } from '../../config/constants.js';
 
-export const attendanceRoutes: FastifyPluginAsync = async (fastify) => {
-  const getTenantId = (request: any, bodyOrQuery?: any): string => {
-    const tenantId = request.user.role === 'SUPER_ADMIN'
-      ? (bodyOrQuery?.schoolId || request.user.tenantId)
-      : request.user.tenantId;
+export const attendanceRoutes = Router();
 
-    if (!tenantId) {
-      throw new AppError('Tenant ID is required', HTTP_STATUS.BAD_REQUEST, 'MISSING_TENANT');
-    }
-    return tenantId;
-  };
+const getTenantId = (req: Request, bodyOrQuery?: any): string => {
+  const tenantId = req.user!.role === 'SUPER_ADMIN'
+    ? (bodyOrQuery?.schoolId || req.user!.tenantId)
+    : req.user!.tenantId;
 
-  // GET /api/v1/attendance/students
-  fastify.get('/students', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const tenantId = getTenantId(request, request.query);
-    const query = request.query as {
+  if (!tenantId) {
+    throw new AppError('Tenant ID is required', HTTP_STATUS.BAD_REQUEST, 'MISSING_TENANT');
+  }
+  return tenantId;
+};
+
+// GET /api/v1/attendance/students
+attendanceRoutes.get('/students', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = getTenantId(req, req.query);
+    const query = req.query as {
       date?: string;
       className?: string;
       subject?: string;
@@ -27,10 +30,9 @@ export const attendanceRoutes: FastifyPluginAsync = async (fastify) => {
       studentId?: string;
     };
 
-    // If STUDENT, ensure they only query their own attendance
     let studentId = query.studentId;
-    if (request.user.role === 'STUDENT') {
-      studentId = request.user.id;
+    if (req.user!.role === 'STUDENT') {
+      studentId = req.user!.id;
     }
 
     const records = await AttendanceService.getStudentAttendance(tenantId, {
@@ -41,68 +43,88 @@ export const attendanceRoutes: FastifyPluginAsync = async (fastify) => {
       studentId,
     });
 
-    return reply.status(200).send({
+    res.status(200).json({
       success: true,
       data: records,
     });
-  });
+  } catch (err) {
+    next(err);
+  }
+});
 
-  // POST /api/v1/attendance/students
-  fastify.post(
-    '/students',
-    { preHandler: [fastify.authenticate, fastify.requireRoles('TEACHER', 'MANAGER', 'SUPER_ADMIN')] },
-    async (request, reply) => {
-      const input = saveStudentAttendanceSchema.parse(request.body);
-      const tenantId = getTenantId(request, input);
-      const result = await AttendanceService.saveStudentAttendance(tenantId, input, request.user.id);
-      return reply.status(200).send({
+// POST /api/v1/attendance/students
+attendanceRoutes.post(
+  '/students',
+  authenticate,
+  requireRoles('TEACHER', 'MANAGER', 'SUPER_ADMIN'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const input = saveStudentAttendanceSchema.parse(req.body);
+      const tenantId = getTenantId(req, input);
+      const result = await AttendanceService.saveStudentAttendance(tenantId, input, req.user!.id);
+      res.status(200).json({
         success: true,
         data: result,
       });
+    } catch (err) {
+      next(err);
     }
-  );
+  }
+);
 
-  // GET /api/v1/attendance/students/summary
-  fastify.get('/students/summary', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const tenantId = getTenantId(request, request.query);
-    const query = request.query as { studentId?: string };
-    const studentId = request.user.role === 'STUDENT' ? request.user.id : (query.studentId || request.user.id);
+// GET /api/v1/attendance/students/summary
+attendanceRoutes.get('/students/summary', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = getTenantId(req, req.query);
+    const query = req.query as { studentId?: string };
+    const studentId = req.user!.role === 'STUDENT' ? req.user!.id : (query.studentId || req.user!.id);
 
     const summary = await AttendanceService.getStudentAverageAttendance(tenantId, studentId);
-    return reply.status(200).send({
+    res.status(200).json({
       success: true,
       data: summary,
     });
-  });
+  } catch (err) {
+    next(err);
+  }
+});
 
-  // GET /api/v1/attendance/teachers
-  fastify.get(
-    '/teachers',
-    { preHandler: [fastify.authenticate, fastify.requireRoles('MANAGER', 'SUPER_ADMIN')] },
-    async (request, reply) => {
-      const tenantId = getTenantId(request, request.query);
-      const query = request.query as { date?: string };
+// GET /api/v1/attendance/teachers
+attendanceRoutes.get(
+  '/teachers',
+  authenticate,
+  requireRoles('MANAGER', 'SUPER_ADMIN'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const tenantId = getTenantId(req, req.query);
+      const query = req.query as { date?: string };
       const records = await AttendanceService.getTeacherAttendance(tenantId, query.date);
-      return reply.status(200).send({
+      res.status(200).json({
         success: true,
         data: records,
       });
+    } catch (err) {
+      next(err);
     }
-  );
+  }
+);
 
-  // POST /api/v1/attendance/teachers
-  fastify.post(
-    '/teachers',
-    { preHandler: [fastify.authenticate, fastify.requireRoles('MANAGER', 'SUPER_ADMIN')] },
-    async (request, reply) => {
-      const input = saveTeacherAttendanceSchema.parse(request.body);
-      const tenantId = getTenantId(request, input);
-      const result = await AttendanceService.saveTeacherAttendance(tenantId, input, request.user.id);
-      return reply.status(200).send({
+// POST /api/v1/attendance/teachers
+attendanceRoutes.post(
+  '/teachers',
+  authenticate,
+  requireRoles('MANAGER', 'SUPER_ADMIN'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const input = saveTeacherAttendanceSchema.parse(req.body);
+      const tenantId = getTenantId(req, input);
+      const result = await AttendanceService.saveTeacherAttendance(tenantId, input, req.user!.id);
+      res.status(200).json({
         success: true,
         data: result,
       });
+    } catch (err) {
+      next(err);
     }
-  );
-};
-
+  }
+);

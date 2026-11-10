@@ -1,78 +1,80 @@
-import { FastifyPluginAsync } from 'fastify';
+import { Router, Request, Response } from 'express';
 import { NotificationsService } from './notifications.service.js';
 import { createNotificationSchema } from './notifications.schema.js';
-import { AppError } from '../../core/errors/app-error.js';
+import { authenticate, requireRoles } from '../../core/middleware/auth.js';
+import { validateRequest } from '../../core/middleware/validate.js';
 import { HTTP_STATUS } from '../../config/constants.js';
 
-export const notificationsRoutes: FastifyPluginAsync = async (fastify) => {
-  const getTenantId = (request: any, bodyOrQuery?: any): string | null => {
-    const tenantId = request.user.role === 'SUPER_ADMIN'
-      ? (bodyOrQuery?.schoolId || request.user.tenantId || null)
-      : (request.user.tenantId || bodyOrQuery?.schoolId || null);
+export const notificationsRoutes = Router();
 
-    return tenantId || null;
-  };
+const getTenantId = (req: Request, bodyOrQuery?: any): string | null => {
+  const tenantId = req.user.role === 'SUPER_ADMIN'
+    ? (bodyOrQuery?.schoolId || req.user.tenantId || null)
+    : (req.user.tenantId || bodyOrQuery?.schoolId || null);
 
-  // GET /api/v1/notifications
-  fastify.get('/', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const tenantId = getTenantId(request, request.query);
-    const list = await NotificationsService.listNotifications(tenantId, request.user.role, request.user.id);
-    return reply.status(200).send({
-      success: true,
-      data: list,
-    });
-  });
-
-  // GET /api/v1/notifications/unread-count
-  fastify.get('/unread-count', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const tenantId = getTenantId(request, request.query);
-    const count = await NotificationsService.getUnreadCount(tenantId, request.user.role, request.user.id);
-    return reply.status(200).send({
-      success: true,
-      data: count,
-    });
-  });
-
-  // POST /api/v1/notifications
-  fastify.post(
-    '/',
-    { preHandler: [fastify.authenticate, fastify.requireRoles('MANAGER', 'TEACHER', 'SUPER_ADMIN')] },
-    async (request, reply) => {
-      const input = createNotificationSchema.parse(request.body);
-      const tenantId = getTenantId(request, input);
-      const notification = await NotificationsService.createNotification(
-        tenantId,
-        request.user.id,
-        input
-      );
-      return reply.status(201).send({
-        success: true,
-        data: notification,
-      });
-    }
-  );
-
-  // PATCH /api/v1/notifications/:id/read
-  fastify.patch('/:id/read', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const tenantId = getTenantId(request, request.query);
-    const result = await NotificationsService.markAsRead(tenantId, id);
-    return reply.status(200).send(result);
-  });
-
-  // PATCH /api/v1/notifications/read-all
-  fastify.patch('/read-all', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const tenantId = getTenantId(request, request.query);
-    const result = await NotificationsService.markAllAsRead(tenantId, request.user.role, request.user.id);
-    return reply.status(200).send(result);
-  });
-
-  // DELETE /api/v1/notifications/:id
-  fastify.delete('/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const tenantId = getTenantId(request, request.query);
-    const result = await NotificationsService.deleteNotification(tenantId, id);
-    return reply.status(200).send(result);
-  });
+  return tenantId || null;
 };
 
+// GET /api/v1/notifications
+notificationsRoutes.get('/', authenticate, async (req: Request, res: Response) => {
+  const tenantId = getTenantId(req, req.query);
+  const list = await NotificationsService.listNotifications(tenantId, req.user.role, req.user.id);
+  return res.status(HTTP_STATUS.OK).json({
+    success: true,
+    data: list,
+  });
+});
+
+// GET /api/v1/notifications/unread-count
+notificationsRoutes.get('/unread-count', authenticate, async (req: Request, res: Response) => {
+  const tenantId = getTenantId(req, req.query);
+  const count = await NotificationsService.getUnreadCount(tenantId, req.user.role, req.user.id);
+  return res.status(HTTP_STATUS.OK).json({
+    success: true,
+    data: count,
+  });
+});
+
+// POST /api/v1/notifications
+notificationsRoutes.post(
+  '/',
+  authenticate,
+  requireRoles('MANAGER', 'TEACHER', 'SUPER_ADMIN'),
+  validateRequest(createNotificationSchema),
+  async (req: Request, res: Response) => {
+    const input = req.body;
+    const tenantId = getTenantId(req, input);
+    const notification = await NotificationsService.createNotification(
+      tenantId,
+      req.user.id,
+      input
+    );
+    return res.status(HTTP_STATUS.CREATED).json({
+      success: true,
+      data: notification,
+    });
+  }
+);
+
+// PATCH /api/v1/notifications/:id/read
+notificationsRoutes.patch('/:id/read', authenticate, async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const tenantId = getTenantId(req, req.query);
+  const result = await NotificationsService.markAsRead(tenantId, id);
+  return res.status(HTTP_STATUS.OK).json(result);
+});
+
+// PATCH /api/v1/notifications/read-all
+notificationsRoutes.patch('/read-all', authenticate, async (req: Request, res: Response) => {
+  const tenantId = getTenantId(req, req.query);
+  const result = await NotificationsService.markAllAsRead(tenantId, req.user.role, req.user.id);
+  return res.status(HTTP_STATUS.OK).json(result);
+});
+
+// DELETE /api/v1/notifications/:id
+notificationsRoutes.delete('/:id', authenticate, async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const tenantId = getTenantId(req, req.query);
+  const result = await NotificationsService.deleteNotification(tenantId, id);
+  return res.status(HTTP_STATUS.OK).json(result);
+});

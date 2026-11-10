@@ -1,5 +1,6 @@
-import { FastifyPluginAsync } from 'fastify';
+import { Router, Request, Response, NextFunction } from 'express';
 import { AuthService } from './auth.service.js';
+import { authenticate } from '../../core/middleware/auth.js';
 import {
   loginSchema,
   refreshTokenSchema,
@@ -9,74 +10,104 @@ import {
   resetPasswordWithOtpSchema,
 } from './auth.schema.js';
 
-export const authRoutes: FastifyPluginAsync = async (fastify) => {
-  // POST /api/v1/auth/login
-  fastify.post('/login', async (request, reply) => {
-    const input = loginSchema.parse(request.body);
+export const authRoutes = Router();
+
+// POST /api/v1/auth/login
+authRoutes.post('/login', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const input = loginSchema.parse(req.body);
     const result = await AuthService.login(input);
-    return reply.status(200).send({
+    res.status(200).json({
       success: true,
       data: result,
     });
-  });
+  } catch (err) {
+    next(err);
+  }
+});
 
-  // POST /api/v1/auth/refresh
-  fastify.post('/refresh', async (request, reply) => {
-    const input = refreshTokenSchema.parse(request.body);
+// POST /api/v1/auth/refresh
+authRoutes.post('/refresh', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const input = refreshTokenSchema.parse(req.body);
     const result = await AuthService.refreshToken(input.refreshToken);
-    return reply.status(200).send({
+    res.status(200).json({
       success: true,
       data: result,
     });
-  });
+  } catch (err) {
+    next(err);
+  }
+});
 
-  // POST /api/v1/auth/logout
-  fastify.post('/logout', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const body = request.body as { refreshToken?: string } | undefined;
-    const result = await AuthService.logout(body?.refreshToken);
-    return reply.status(200).send(result);
-  });
+// POST /api/v1/auth/logout
+authRoutes.post('/logout', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await AuthService.logout(req.body?.refreshToken);
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
 
-  // POST /api/v1/auth/change-password
-  fastify.post('/change-password', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const input = changePasswordSchema.parse(request.body);
-    const result = await AuthService.changePassword(request.user.id, input.password);
-    return reply.status(200).send(result);
-  });
+// POST /api/v1/auth/change-password
+authRoutes.post('/change-password', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const input = changePasswordSchema.parse(req.body);
+    const result = await AuthService.changePassword(req.user!.id, input.password);
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
 
-  // POST /api/v1/auth/forgot-password
-  fastify.post('/forgot-password', async (request, reply) => {
-    const input = forgotPasswordSchema.parse(request.body);
+// POST /api/v1/auth/forgot-password
+authRoutes.post('/forgot-password', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const input = forgotPasswordSchema.parse(req.body);
     const result = await AuthService.requestPasswordResetOtp(input.email);
-    return reply.status(200).send(result);
-  });
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
 
-  // POST /api/v1/auth/reset-password
-  fastify.post('/reset-password', async (request, reply) => {
-    const input = resetPasswordWithOtpSchema.parse(request.body);
+// POST /api/v1/auth/reset-password
+authRoutes.post('/reset-password', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const input = resetPasswordWithOtpSchema.parse(req.body);
     const result = await AuthService.resetPasswordWithOtp(input);
-    return reply.status(200).send(result);
-  });
-};
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
 
-export const profileRoutes: FastifyPluginAsync = async (fastify) => {
-  // GET /api/v1/profile/me
-  fastify.get('/me', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const profile = await AuthService.getProfile(request.user.id);
-    return reply.status(200).send({
+export const profileRoutes = Router();
+
+// GET /api/v1/profile/me
+profileRoutes.get('/me', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const profile = await AuthService.getProfile(req.user!.id);
+    res.status(200).json({
       success: true,
       data: profile,
     });
-  });
+  } catch (err) {
+    next(err);
+  }
+});
 
-  // PUT /api/v1/profile/me
-  fastify.put('/me', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const input = updateProfileSchema.parse(request.body);
-    const updated = await AuthService.updateProfile(request.user.id, input);
-    return reply.status(200).send({
+// PUT /api/v1/profile/me
+profileRoutes.put('/me', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const input = updateProfileSchema.parse(req.body);
+    const updated = await AuthService.updateProfile(req.user!.id, input);
+    res.status(200).json({
       success: true,
       data: updated,
     });
-  });
-};
-
+  } catch (err) {
+    next(err);
+  }
+});

@@ -1,164 +1,111 @@
-import Fastify, { FastifyInstance } from "fastify";
-import cors from "@fastify/cors";
-import helmet from "@fastify/helmet";
-import cookie from "@fastify/cookie";
-import multipart from "@fastify/multipart";
-import { ZodError } from "zod";
+import express, { Express, Request, Response, NextFunction } from "express";
+import cors from "cors";
+import helmet from "helmet";
+import cookieParser from "cookie-parser";
 import { env } from "./config/env.js";
-import { AppError } from "./core/errors/app-error.js";
 import { HTTP_STATUS } from "./config/constants.js";
-import mongoosePlugin from "./core/plugins/mongoose.js";
-import authPlugin from "./core/plugins/auth.js";
+import { connectMongo, mongoose } from "./core/database/connection.js";
 import { apiRoutes } from "./routes/index.js";
+import { errorHandler } from "./core/middleware/error-handler.js";
 import { seedInitialAdmin } from "./core/utils/seed.js";
 
-export function buildApp(): FastifyInstance {
-  const app = Fastify({
-    logger:
-      !process.env.VERCEL && env.NODE_ENV === "development"
-        ? { transport: { target: "pino-pretty" } }
-        : true,
-    rewriteUrl(req) {
-      const originalPath = req.headers["x-matched-path"] as string;
-      if (originalPath && typeof originalPath === "string" && !originalPath.includes("[")) {
-        const queryIdx = req.url?.indexOf("?") ?? -1;
-        const search = queryIdx !== -1 ? req.url!.substring(queryIdx) : "";
-        return originalPath + search;
-      }
-      return req.url || "/";
-    },
-  });
+export function createApp(): Express {
+  const app = express();
 
-  // Database Connection Plugin
-  app.register(mongoosePlugin);
+  // Global Security Headers
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+    })
+  );
 
-  // Authentication & Authorization Plugin
-  app.register(authPlugin);
+  // CORS Configuration
+  app.use(
+    cors({
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        if (
+          origin === env.CLIENT_ORIGIN ||
+          origin.includes("localhost") ||
+          origin.includes("127.0.0.1") ||
+          origin.endsWith(".vercel.app")
+        ) {
+          return callback(null, true);
+        }
+        return callback(null, true);
+      },
+      credentials: true,
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
+    })
+  );
 
-  // Global Security Plugins
-  app.register(helmet, {
-    contentSecurityPolicy: false, // Allows flexible integration in dev/testing
-  });
+  // Body and Cookie Parsers
+  app.use(cookieParser());
+  app.use(express.json({ limit: "10mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-  app.register(cors, {
-    origin: (origin, cb) => {
-      // Allow requests with no origin (curl, mobile apps, postman)
-      if (!origin) return cb(null, true);
-
-      // Allow configured origin, localhost, or any vercel.app domains
-      if (
-        origin === env.CLIENT_ORIGIN ||
-        origin.includes("localhost") ||
-        origin.includes("127.0.0.1") ||
-        origin.endsWith(".vercel.app")
-      ) {
-        return cb(null, true);
-      }
-      return cb(null, true);
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  });
-
-  app.register(cookie);
-
-  app.register(multipart, {
-    limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB limit for PDFs and documents
-    },
-  });
-
-  // Automatically seed initial admin in background without blocking server readiness
-  app.addHook("onReady", async () => {
-    seedInitialAdmin().catch((err) => {
-      app.log.warn("Deferred admin seed attempt: " + (err?.message || err));
-    });
-  });
-
-  // Root & Health Endpoints
+  // Root & Health Endpoints (Immediate liveness probes for Vercel/Monitoring)
   const rootResponse = () => ({
     status: "ok",
     service: "SkoolNova ERP Backend",
     version: "1.0.0",
-    database: "ready",
+    database: mongoose.connection.readyState === 1 ? "connected" : "connecting",
     timestamp: new Date().toISOString(),
   });
 
-  app.get("/", async () => rootResponse());
-  app.get("/api", async () => rootResponse());
-  app.get("/api/", async () => rootResponse());
-
-  app.get("/api/v1/health", async () => {
-    return {
-      status: "ok",
-      service: "SkoolNova ERP Backend",
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-    };
+  app.get("/", (_req: Request, res: Response) => {
+    res.json(rootResponse());
   });
 
-  // Register All API v1 Routes
-  app.register(apiRoutes, { prefix: "/api/v1" });
+  app.get("/api", (_req: Request, res: Response) => {
+    res.json(rootResponse());
+  });
 
-  // Global 404 Not Found Handler
-  app.setNotFoundHandler((request, reply) => {
-    reply.status(HTTP_STATUS.NOT_FOUND).send({
+  app.get("/api/", (_req: Request, res: Response) => {
+    res.json(rootResponse());
+  });
+
+  app.get("/api/v1/health", (_req: Request, res: Response) => {
+    res.json({
+      status: "ok",
+      service: "SkoolNova ERP Backend",
+      database: mongoose.connection.readyState === 1 ? "connected" : "connecting",
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+    });
+  });
+
+  // Ensure Database Connection for API data endpoints (Serverless cold-start connection)
+  app.use(async (_req: Request, _res: Response, next: NextFunction) => {
+    try {
+      await connectMongo();
+      // Asynchronously trigger admin seed in background if not already seeded
+      seedInitialAdmin().catch((err) => {
+        console.warn("Deferred admin seed attempt:", err?.message || err);
+      });
+      next();
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Mount API v1 Routes
+  app.use("/api/v1", apiRoutes);
+
+  // 404 Handler
+  app.use((req: Request, res: Response) => {
+    res.status(HTTP_STATUS.NOT_FOUND).json({
       success: false,
       error: {
         code: "NOT_FOUND",
-        message: `Route ${request.method} ${request.url} not found`,
+        message: `Route ${req.method} ${req.originalUrl} not found`,
       },
     });
   });
 
-  // Global Error Handler
-  app.setErrorHandler((error, _request, reply) => {
-    if (error instanceof AppError) {
-      return reply.status(error.statusCode).send({
-        success: false,
-        error: {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-        },
-      });
-    }
-
-    if (error instanceof ZodError) {
-      return reply.status(HTTP_STATUS.BAD_REQUEST).send({
-        success: false,
-        error: {
-          code: "VALIDATION_ERROR",
-          message: "Request validation failed",
-          details: error.flatten().fieldErrors,
-        },
-      });
-    }
-
-    // Handle Mongo Duplicate Key Error (E11000)
-    if ((error as any).code === 11000) {
-      const field = Object.keys((error as any).keyPattern || {})[0] || 'field';
-      return reply.status(HTTP_STATUS.CONFLICT).send({
-        success: false,
-        error: {
-          code: "DUPLICATE_KEY",
-          message: `A record with this ${field} already exists in the system`,
-        },
-      });
-    }
-
-    // Default Unhandled Server Error
-    app.log.error(error);
-    const err = error as { statusCode?: number; message?: string };
-    const statusCode = err.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR;
-    return reply.status(statusCode).send({
-      success: false,
-      error: {
-        code: "INTERNAL_SERVER_ERROR",
-        message: err.message || "Internal server error",
-      },
-    });
-  });
+  // Centralized Error Handler
+  app.use(errorHandler);
 
   return app;
 }

@@ -1,109 +1,137 @@
-import { FastifyPluginAsync } from 'fastify';
+import { Router, Request, Response, NextFunction } from 'express';
 import { AssignmentsService } from './assignments.service.js';
 import {
   createAssignmentSchema,
   submitAssignmentSchema,
   gradeSubmissionSchema,
 } from './assignments.schema.js';
+import { authenticate, requireRoles } from '../../core/middleware/auth.js';
 import { AppError } from '../../core/errors/app-error.js';
 import { HTTP_STATUS } from '../../config/constants.js';
 
-export const assignmentsRoutes: FastifyPluginAsync = async (fastify) => {
-  const getTenantId = (request: any, bodyOrQuery?: any): string => {
-    const tenantId = request.user.role === 'SUPER_ADMIN'
-      ? (bodyOrQuery?.schoolId || request.user.tenantId)
-      : request.user.tenantId;
+export const assignmentsRoutes = Router();
 
-    if (!tenantId) {
-      throw new AppError('Tenant ID is required', HTTP_STATUS.BAD_REQUEST, 'MISSING_TENANT');
-    }
-    return tenantId;
-  };
+const getTenantId = (req: Request, bodyOrQuery?: any): string => {
+  const tenantId = req.user!.role === 'SUPER_ADMIN'
+    ? (bodyOrQuery?.schoolId || req.user!.tenantId)
+    : req.user!.tenantId;
 
-  // GET /api/v1/assignments - List assignments
-  fastify.get('/', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const tenantId = getTenantId(request, request.query);
-    const query = request.query as { className?: string; subject?: string };
+  if (!tenantId) {
+    throw new AppError('Tenant ID is required', HTTP_STATUS.BAD_REQUEST, 'MISSING_TENANT');
+  }
+  return tenantId;
+};
+
+// GET /api/v1/assignments - List assignments
+assignmentsRoutes.get('/', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = getTenantId(req, req.query);
+    const query = req.query as { className?: string; subject?: string };
     const assignments = await AssignmentsService.listAssignments(
       tenantId,
-      request.user.role,
-      request.user.id,
+      req.user!.role,
+      req.user!.id,
       query
     );
-    return reply.status(200).send({
+    res.status(200).json({
       success: true,
       data: assignments,
     });
-  });
+  } catch (err) {
+    next(err);
+  }
+});
 
-  // GET /api/v1/assignments/:id - Single assignment with submissions
-  fastify.get('/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const tenantId = getTenantId(request, request.query);
+// GET /api/v1/assignments/:id - Single assignment with submissions
+assignmentsRoutes.get('/:id', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const tenantId = getTenantId(req, req.query);
     const assignment = await AssignmentsService.getAssignment(id, tenantId);
-    return reply.status(200).send({
+    res.status(200).json({
       success: true,
       data: assignment,
     });
-  });
+  } catch (err) {
+    next(err);
+  }
+});
 
-  // POST /api/v1/assignments - Create assignment
-  fastify.post(
-    '/',
-    { preHandler: [fastify.authenticate, fastify.requireRoles('TEACHER', 'MANAGER', 'SUPER_ADMIN')] },
-    async (request, reply) => {
-      const input = createAssignmentSchema.parse(request.body);
-      const tenantId = getTenantId(request, input);
-      const assignment = await AssignmentsService.createAssignment(tenantId, request.user.id, input);
-      return reply.status(201).send({
+// POST /api/v1/assignments - Create assignment
+assignmentsRoutes.post(
+  '/',
+  authenticate,
+  requireRoles('TEACHER', 'MANAGER', 'SUPER_ADMIN'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const input = createAssignmentSchema.parse(req.body);
+      const tenantId = getTenantId(req, input);
+      const assignment = await AssignmentsService.createAssignment(tenantId, req.user!.id, input);
+      res.status(201).json({
         success: true,
         data: assignment,
       });
+    } catch (err) {
+      next(err);
     }
-  );
+  }
+);
 
-  // DELETE /api/v1/assignments/:id - Delete assignment
-  fastify.delete(
-    '/:id',
-    { preHandler: [fastify.authenticate, fastify.requireRoles('TEACHER', 'MANAGER', 'SUPER_ADMIN')] },
-    async (request, reply) => {
-      const { id } = request.params as { id: string };
-      const tenantId = getTenantId(request, request.query);
+// DELETE /api/v1/assignments/:id - Delete assignment
+assignmentsRoutes.delete(
+  '/:id',
+  authenticate,
+  requireRoles('TEACHER', 'MANAGER', 'SUPER_ADMIN'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      const tenantId = getTenantId(req, req.query);
       const result = await AssignmentsService.deleteAssignment(id, tenantId);
-      return reply.status(200).send(result);
+      res.status(200).json(result);
+    } catch (err) {
+      next(err);
     }
-  );
+  }
+);
 
-  // POST /api/v1/assignments/:id/submit - Submit assignment
-  fastify.post(
-    '/:id/submit',
-    { preHandler: [fastify.authenticate, fastify.requireRoles('STUDENT')] },
-    async (request, reply) => {
-      const { id } = request.params as { id: string };
-      const input = submitAssignmentSchema.parse(request.body);
-      const tenantId = getTenantId(request, input);
-      const submission = await AssignmentsService.submitAssignment(id, request.user.id, tenantId, input);
-      return reply.status(200).send({
+// POST /api/v1/assignments/:id/submit - Submit assignment
+assignmentsRoutes.post(
+  '/:id/submit',
+  authenticate,
+  requireRoles('STUDENT'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      const input = submitAssignmentSchema.parse(req.body);
+      const tenantId = getTenantId(req, input);
+      const submission = await AssignmentsService.submitAssignment(id, req.user!.id, tenantId, input);
+      res.status(200).json({
         success: true,
         data: submission,
       });
+    } catch (err) {
+      next(err);
     }
-  );
+  }
+);
 
-  // PATCH /api/v1/assignments/submissions/:submissionId/grade - Grade submission
-  fastify.patch(
-    '/submissions/:submissionId/grade',
-    { preHandler: [fastify.authenticate, fastify.requireRoles('TEACHER', 'MANAGER', 'SUPER_ADMIN')] },
-    async (request, reply) => {
-      const { submissionId } = request.params as { submissionId: string };
-      const input = gradeSubmissionSchema.parse(request.body);
-      const tenantId = getTenantId(request, request.query);
+// PATCH /api/v1/assignments/submissions/:submissionId/grade - Grade submission
+assignmentsRoutes.patch(
+  '/submissions/:submissionId/grade',
+  authenticate,
+  requireRoles('TEACHER', 'MANAGER', 'SUPER_ADMIN'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { submissionId } = req.params;
+      const input = gradeSubmissionSchema.parse(req.body);
+      const tenantId = getTenantId(req, req.query);
       const graded = await AssignmentsService.gradeSubmission(submissionId, tenantId, input);
-      return reply.status(200).send({
+      res.status(200).json({
         success: true,
         data: graded,
       });
+    } catch (err) {
+      next(err);
     }
-  );
-};
-
+  }
+);

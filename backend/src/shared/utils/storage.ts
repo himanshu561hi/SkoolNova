@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { v2 as cloudinary } from 'cloudinary';
 import ImageKit from 'imagekit';
@@ -160,7 +161,9 @@ async function uploadToLocal(fileStream: NodeJS.ReadableStream, originalFilename
  * Automatically uses ImageKit or Cloudinary when configured,
  * otherwise falls back gracefully to local disk storage.
  */
-export async function saveUploadedFile(fileStream: NodeJS.ReadableStream, originalFilename: string) {
+export async function saveUploadedFile(fileData: Buffer | NodeJS.ReadableStream, originalFilename: string) {
+  const fileStream = Buffer.isBuffer(fileData) ? Readable.from(fileData) : fileData;
+
   // If ImageKit explicitly selected or configured
   if (env.STORAGE_PROVIDER === 'imagekit' && hasImageKit) {
     return uploadToImageKit(fileStream, originalFilename);

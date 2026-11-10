@@ -1,4 +1,4 @@
-import { FastifyPluginAsync } from 'fastify';
+import { Router, Request, Response } from 'express';
 import { inquiriesService } from './inquiries.service.js';
 import {
   createInquirySchema,
@@ -6,85 +6,108 @@ import {
   updateInquiryStatusSchema,
   listInquiriesQuerySchema,
 } from './inquiries.schema.js';
+import { authenticate, requireRoles } from '../../core/middleware/auth.js';
+import { validateRequest } from '../../core/middleware/validate.js';
 import { HTTP_STATUS } from '../../config/constants.js';
 
-export const inquiriesRoutes: FastifyPluginAsync = async (fastify) => {
-  // Public: Submit inquiry from website (No authentication required)
-  fastify.post('/', async (request, reply) => {
-    const input = createInquirySchema.parse(request.body);
+export const inquiriesRoutes = Router();
+
+// Public: Submit inquiry from website (No authentication required)
+inquiriesRoutes.post(
+  '/',
+  validateRequest(createInquirySchema),
+  async (req: Request, res: Response) => {
+    const input = req.body;
     const inquiry = await inquiriesService.createInquiry(input);
 
-    return reply.status(HTTP_STATUS.CREATED).send({
+    return res.status(HTTP_STATUS.CREATED).json({
       success: true,
       data: inquiry,
       message: 'Inquiry submitted successfully',
     });
-  });
+  }
+);
 
-  // Protected: Super Admin inquiries management
-  fastify.register(async (adminRoutes) => {
-    adminRoutes.addHook('preHandler', fastify.authenticate);
-    adminRoutes.addHook('preHandler', fastify.requireRoles('SUPER_ADMIN'));
+// Protected: Super Admin inquiries management
+inquiriesRoutes.get(
+  '/',
+  authenticate,
+  requireRoles('SUPER_ADMIN'),
+  async (req: Request, res: Response) => {
+    const query = listInquiriesQuerySchema.parse(req.query);
+    const result = await inquiriesService.listInquiries(query);
 
-    // List inquiries with search & filter
-    adminRoutes.get('/', async (request, reply) => {
-      const query = listInquiriesQuerySchema.parse(request.query);
-      const result = await inquiriesService.listInquiries(query);
-
-      return reply.send({
-        success: true,
-        data: result,
-      });
+    return res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: result,
     });
+  }
+);
 
-    // Get single inquiry
-    adminRoutes.get('/:id', async (request, reply) => {
-      const { id } = request.params as { id: string };
-      const inquiry = await inquiriesService.getInquiryById(id);
+inquiriesRoutes.get(
+  '/:id',
+  authenticate,
+  requireRoles('SUPER_ADMIN'),
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const inquiry = await inquiriesService.getInquiryById(id);
 
-      return reply.send({
-        success: true,
-        data: inquiry,
-      });
+    return res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: inquiry,
     });
+  }
+);
 
-    // Reply to inquiry
-    adminRoutes.patch('/:id/reply', async (request, reply) => {
-      const { id } = request.params as { id: string };
-      const input = replyInquirySchema.parse(request.body);
-      const repliedBy = request.user.email;
+inquiriesRoutes.patch(
+  '/:id/reply',
+  authenticate,
+  requireRoles('SUPER_ADMIN'),
+  validateRequest(replyInquirySchema),
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const input = req.body;
+    const repliedBy = req.user.email;
 
-      const updated = await inquiriesService.replyToInquiry(id, input, repliedBy);
+    const updated = await inquiriesService.replyToInquiry(id, input, repliedBy);
 
-      return reply.send({
-        success: true,
-        data: updated,
-        message: 'Reply recorded successfully',
-      });
+    return res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: updated,
+      message: 'Reply recorded successfully',
     });
+  }
+);
 
-    // Update status
-    adminRoutes.patch('/:id/status', async (request, reply) => {
-      const { id } = request.params as { id: string };
-      const input = updateInquiryStatusSchema.parse(request.body);
+inquiriesRoutes.patch(
+  '/:id/status',
+  authenticate,
+  requireRoles('SUPER_ADMIN'),
+  validateRequest(updateInquiryStatusSchema),
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const input = req.body;
 
-      const updated = await inquiriesService.updateStatus(id, input);
+    const updated = await inquiriesService.updateStatus(id, input);
 
-      return reply.send({
-        success: true,
-        data: updated,
-      });
+    return res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: updated,
     });
+  }
+);
 
-    // Delete inquiry
-    adminRoutes.delete('/:id', async (request, reply) => {
-      const { id } = request.params as { id: string };
-      const result = await inquiriesService.deleteInquiry(id);
+inquiriesRoutes.delete(
+  '/:id',
+  authenticate,
+  requireRoles('SUPER_ADMIN'),
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const result = await inquiriesService.deleteInquiry(id);
 
-      return reply.send({
-        success: true,
-        data: result,
-      });
+    return res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: result,
     });
-  });
-};
+  }
+);

@@ -1,4 +1,4 @@
-import { FastifyPluginAsync } from 'fastify';
+import { Router } from 'express';
 import { authRoutes, profileRoutes } from '../modules/auth/auth.routes.js';
 import { schoolsRoutes } from '../modules/schools/schools.routes.js';
 import { studentsRoutes } from '../modules/students/students.routes.js';
@@ -14,20 +14,20 @@ import { notificationsRoutes } from '../modules/notifications/notifications.rout
 import { dashboardRoutes } from '../modules/dashboard/dashboard.routes.js';
 import { inquiriesRoutes } from '../modules/inquiries/inquiries.routes.js';
 
-export const apiRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.register(authRoutes, { prefix: '/auth' });
-  fastify.register(profileRoutes, { prefix: '/profile' });
-  fastify.register(schoolsRoutes, { prefix: '/schools' });
-  fastify.register(studentsRoutes, { prefix: '/students' });
-  fastify.register(teachersRoutes, { prefix: '/teachers' });
-  fastify.register(academicsRoutes, { prefix: '/academics' });
-  fastify.register(timetableRoutes, { prefix: '/timetable' });
-  fastify.register(attendanceRoutes, { prefix: '/attendance' });
-  fastify.register(assignmentsRoutes, { prefix: '/assignments' });
-  fastify.register(uploadsRoutes, { prefix: '/uploads' });
-  fastify.register(examsRoutes, { prefix: '/exams' });
-  fastify.register(leavesRoutes, { prefix: '/leaves' });
-  fastify.register(notificationsRoutes, { prefix: '/notifications' });
-  fastify.register(dashboardRoutes, { prefix: '/dashboard' });
-  fastify.register(inquiriesRoutes, { prefix: '/inquiries' });
-};
+export const apiRoutes = Router();
+
+apiRoutes.use('/auth', authRoutes);
+apiRoutes.use('/profile', profileRoutes);
+apiRoutes.use('/schools', schoolsRoutes);
+apiRoutes.use('/students', studentsRoutes);
+apiRoutes.use('/teachers', teachersRoutes);
+apiRoutes.use('/academics', academicsRoutes);
+apiRoutes.use('/timetable', timetableRoutes);
+apiRoutes.use('/attendance', attendanceRoutes);
+apiRoutes.use('/assignments', assignmentsRoutes);
+apiRoutes.use('/uploads', uploadsRoutes);
+apiRoutes.use('/exams', examsRoutes);
+apiRoutes.use('/leaves', leavesRoutes);
+apiRoutes.use('/notifications', notificationsRoutes);
+apiRoutes.use('/dashboard', dashboardRoutes);
+apiRoutes.use('/inquiries', inquiriesRoutes);
