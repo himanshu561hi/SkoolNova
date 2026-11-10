@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SkoolNova ERP Backend API</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #0f172a;
+      color: #f8fafc;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 32px;
+      max-width: 480px;
+      width: 100%;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+      text-align: center;
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(34, 197, 94, 0.15);
+      color: #4ade80;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    h1 { margin: 0 0 8px 0; font-size: 24px; font-weight: 700; }
+    p { margin: 0 0 24px 0; color: #94a3b8; font-size: 14px; }
+    .btn {
+      display: inline-block;
+      background: #3b82f6;
+      color: #ffffff;
+      text-decoration: none;
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: background 0.2s;
+      margin: 4px;
+    }
+    .btn:hover { background: #2563eb; }
+    .btn-secondary { background: #334155; }
+    .btn-secondary:hover { background: #475569; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">● Online &amp; Operational</div>
+    <h1>SkoolNova ERP Backend</h1>
+    <p>Enterprise Educational Management System API running Fastify &amp; MongoDB Atlas on Vercel Serverless.</p>
+    <div>
+      <a class="btn" href="/api/v1/health">Check /api/v1/health</a>
+      <a class="btn btn-secondary" href="/api">API Status (/api)</a>
+    </div>
+  </div>
+</body>
+</html>
