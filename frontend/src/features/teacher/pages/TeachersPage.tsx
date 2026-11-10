@@ -43,6 +43,14 @@ import type { Teacher } from "../types/teacher.types";
 
 const DEFAULT_ITEMS_PER_PAGE = 5;
 
+const TEACHER_SEARCHABLE_KEYS: (keyof Teacher)[] = [
+  "fullName",
+  "email",
+  "department",
+  "subject",
+  "employeeId",
+];
+
 export const TeachersPage = () => {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const user = useAuthStore(state => state.user);
@@ -99,14 +107,7 @@ export const TeachersPage = () => {
 
   const { searchQuery, setSearchQuery, filteredData: searchFilteredData } = useTableSearch({
     data: teachers,
-
-    searchableKeys: [
-      "fullName",
-      "email",
-      "department",
-      "subject",
-      "employeeId",
-    ],
+    searchableKeys: TEACHER_SEARCHABLE_KEYS,
   });
 
   const {
@@ -194,6 +195,42 @@ export const TeachersPage = () => {
 
     return filteredTeachers.slice(startIndex, startIndex + itemsPerPage);
   }, [currentPage, filteredTeachers, itemsPerPage]);
+
+  /* ========================= */
+  /* TABLE COLUMNS */
+  /* ========================= */
+
+  const columns = useMemo(
+    () => [
+      { key: "fullName" as const, header: "Teacher" },
+      { key: "employeeId" as const, header: "Employee ID" },
+      { key: "department" as const, header: "Department" },
+      { key: "subject" as const, header: "Subject" },
+      {
+        key: "status" as const,
+        header: "Status",
+        render: (value: any) => (
+          <StatusBadge
+            label={String(value)}
+            variant={value === "ACTIVE" ? "success" : "danger"}
+          />
+        ),
+      },
+      {
+        key: "id" as const,
+        header: "Actions",
+        sortable: false,
+        render: (_: any, row: Teacher) => (
+          <TeacherActionCell
+            row={row}
+            onEdit={setEditingTeacher}
+            onDelete={setDeletingTeacherId}
+          />
+        ),
+      },
+    ],
+    []
+  );
 
   return (
     <div className="space-y-6">
@@ -396,34 +433,7 @@ export const TeachersPage = () => {
                 : "Teachers added to your school will appear here."
             }
             emptyIcon={<SearchX className="h-10 w-10" />}
-            columns={[
-              { key: "fullName", header: "Teacher" },
-              { key: "employeeId", header: "Employee ID" },
-              { key: "department", header: "Department" },
-              { key: "subject", header: "Subject" },
-              {
-                key: "status",
-                header: "Status",
-                render: (value) => (
-                  <StatusBadge
-                    label={String(value)}
-                    variant={value === "ACTIVE" ? "success" : "danger"}
-                  />
-                ),
-              },
-              {
-                key: "id",
-                header: "Actions",
-                sortable: false,
-                render: (_, row) => (
-                  <TeacherActionCell
-                    row={row}
-                    onEdit={setEditingTeacher}
-                    onDelete={setDeletingTeacherId}
-                  />
-                ),
-              },
-            ]}
+            columns={columns}
           />
 
           {/* PAGINATION */}

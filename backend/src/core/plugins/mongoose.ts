@@ -37,8 +37,15 @@ const mongoosePlugin: FastifyPluginAsync = async (fastify) => {
 
   // Ensure DB connection before processing business data routes
   fastify.addHook("onRequest", async (request) => {
-    // Bypass health check endpoints so uptime monitors never fail
-    if (request.url === "/" || request.url === "/api/v1/health") {
+    // Bypass health check and root ping endpoints so serverless startup never hangs
+    const cleanUrl = request.url?.split("?")[0] || "";
+    if (
+      cleanUrl === "" ||
+      cleanUrl === "/" ||
+      cleanUrl === "/api" ||
+      cleanUrl === "/api/" ||
+      cleanUrl.startsWith("/api/v1/health")
+    ) {
       return;
     }
     if (mongoose.connection.readyState !== 1) {

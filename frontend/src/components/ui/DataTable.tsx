@@ -75,12 +75,13 @@ function DataTable<T extends { id: string }>({
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
 
   // column visibility state
+  const columnKeysStr = safeColumns.map((c) => String(c.key)).join(",");
   const [visibleColumns, setVisibleColumns] = useState<(keyof T)[]>(() =>
     safeColumns.map((c) => c.key)
   );
-  const [prevColumns, setPrevColumns] = useState(safeColumns);
-  if (prevColumns !== safeColumns) {
-    setPrevColumns(safeColumns);
+  const [prevColumnKeys, setPrevColumnKeys] = useState(columnKeysStr);
+  if (prevColumnKeys !== columnKeysStr) {
+    setPrevColumnKeys(columnKeysStr);
     setVisibleColumns(safeColumns.map((c) => c.key));
   }
 

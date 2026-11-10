@@ -3,6 +3,12 @@ import { hashPassword } from '../../shared/utils/security.js';
 import { env } from '../../config/env.js';
 
 export async function seedInitialAdmin(): Promise<void> {
+  const mongoose = await import('mongoose');
+  if (mongoose.default.connection.readyState !== 1) {
+    // Avoid blocking or unhandled buffer timeouts if DB not yet connected
+    return;
+  }
+
   const adminEmail = env.ADMIN_EMAIL.toLowerCase().trim();
   const passwordHash = await hashPassword(env.ADMIN_PASSWORD);
 

@@ -18,6 +18,15 @@ export function buildApp(): FastifyInstance {
       !process.env.VERCEL && env.NODE_ENV === "development"
         ? { transport: { target: "pino-pretty" } }
         : true,
+    rewriteUrl(req) {
+      const originalPath = req.headers["x-matched-path"] as string;
+      if (originalPath && typeof originalPath === "string" && !originalPath.includes("[")) {
+        const queryIdx = req.url?.indexOf("?") ?? -1;
+        const search = queryIdx !== -1 ? req.url!.substring(queryIdx) : "";
+        return originalPath + search;
+      }
+      return req.url || "/";
+    },
   });
 
   // Database Connection Plugin
@@ -67,15 +76,17 @@ export function buildApp(): FastifyInstance {
   });
 
   // Root & Health Endpoints
-  app.get("/", async () => {
-    return {
-      status: "ok",
-      service: "SkoolNova ERP Backend",
-      version: "1.0.0",
-      database: "ready",
-      timestamp: new Date().toISOString(),
-    };
+  const rootResponse = () => ({
+    status: "ok",
+    service: "SkoolNova ERP Backend",
+    version: "1.0.0",
+    database: "ready",
+    timestamp: new Date().toISOString(),
   });
+
+  app.get("/", async () => rootResponse());
+  app.get("/api", async () => rootResponse());
+  app.get("/api/", async () => rootResponse());
 
   app.get("/api/v1/health", async () => {
     return {
