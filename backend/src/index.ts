@@ -27,40 +27,17 @@ export default async function handler(req: any, res: any) {
     const queryString = queryIndex !== -1 ? url.substring(queryIndex) : "";
     url = matchedPath + queryString;
   }
-  if (!url.startsWith("/")) {
-    url = "/" + url;
+  if (!url || url === "" || url === "/api" || url === "/api/") {
+    url = "/";
   }
+  req.url = url;
 
-  let payload: any = undefined;
-  if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS") {
-    if (req.body !== undefined && req.body !== null) {
-      payload = typeof req.body === "object" ? JSON.stringify(req.body) : req.body;
-    } else {
-      const chunks: Buffer[] = [];
-      for await (const chunk of req) {
-        chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
-      }
-      if (chunks.length > 0) {
-        payload = Buffer.concat(chunks);
-      }
-    }
-  }
-
-  const response = await app.inject({
-    method: req.method || "GET",
-    url,
-    headers: req.headers,
-    payload,
+  return new Promise((resolve, reject) => {
+    res.on("finish", resolve);
+    res.on("close", resolve);
+    res.on("error", reject);
+    app.server.emit("request", req, res);
   });
-
-  res.statusCode = response.statusCode;
-  for (const [key, value] of Object.entries(response.headers)) {
-    if (value !== undefined) {
-      res.setHeader(key, value);
-    }
-  }
-  return res.end(response.rawPayload);
 }
 
 export { app };
-
