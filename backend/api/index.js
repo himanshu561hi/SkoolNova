@@ -1,16 +1,39 @@
 const path = require("path");
+const fs = require("fs");
 
-let buildApp;
-try {
-  ({ buildApp } = require("../dist/app.js"));
-} catch (e1) {
-  try {
-    ({ buildApp } = require(path.join(process.cwd(), "dist/app.js")));
-  } catch (e2) {
-    console.error("Failed to load buildApp from both relative and process.cwd() paths:", e1, e2);
+function loadBuildApp() {
+  const candidatePaths = [
+    path.join(__dirname, "../dist/app.js"),
+    path.join(__dirname, "./dist/app.js"),
+    path.join(process.cwd(), "dist/app.js"),
+    path.join(process.cwd(), "backend/dist/app.js"),
+  ];
+
+  for (const candidate of candidatePaths) {
+    try {
+      if (fs.existsSync(candidate)) {
+        const mod = require(candidate);
+        if (mod && mod.buildApp) {
+          return mod.buildApp;
+        }
+      }
+    } catch (e) {
+      console.warn("Could not load from candidate:", candidate, e.message);
+    }
   }
+
+  // Direct require fallback
+  try {
+    const mod = require("../dist/app.js");
+    return mod.buildApp;
+  } catch (err) {
+    console.error("Direct require fallback failed:", err.message);
+  }
+
+  return null;
 }
 
+let buildApp = loadBuildApp();
 let app;
 
 module.exports = async (req, res) => {
@@ -21,6 +44,9 @@ module.exports = async (req, res) => {
     }
 
     if (!app) {
+      if (!buildApp) {
+        buildApp = loadBuildApp();
+      }
       if (!buildApp) {
         throw new Error(
           "Could not load buildApp from dist/app.js. Ensure 'npm run build' (tsc) executed successfully."
